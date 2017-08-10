@@ -104,8 +104,8 @@ def plot_field(field_params, r_data, g_data, fignum, save_path, title):
     plt.pcolor(field_params[0], field_params[1], probs, cmap='coolwarm', vmin=z_min, vmax=z_max)
     plt.axis([field_params[3][0], field_params[3][1], field_params[3][2], field_params[3][3]])
     #plt.colorbar()
-    plt.contour(field_params[0], field_params[1], probs, colors=['k', 'k', 'k'], linestyles=['--', '-', '--'],
-                levels=[.4, 0.5, .6])
+    plt.contour(field_params[0], field_params[1], field_params[2], colors=['k', 'k', 'k'], linestyles=['--', '-', '--'],
+                levels=[-1.0, 0.0, 1.0])
     plt.title(title)
 
     plt.savefig(save_path)
@@ -125,7 +125,7 @@ def plot_time_series(name, vals, fignum, save_path, color='b'):
 def plot_time_mat(mat, mat_names, fignum, save_path):
     for n in range(mat.shape[1]):
         fig_name = mat_names[n]
-        plot_time_series(fig_name, mat[:,n], fignum, save_path+'/'+fig_name+'.pdf')
+        plot_time_series(fig_name, mat[:,n], fignum, save_path+'/'+fig_name+'.png')
 
 if __name__ == '__main__':
     ### dataset definition
@@ -145,11 +145,11 @@ if __name__ == '__main__':
     d_g_logs = list()
 
     ### baby gan training
-    epochs = 10
-    d_updates = 50
-    g_updates = 50
+    epochs = 2
+    d_updates = 128
+    g_updates = 20
     baby = baby_gan.BabyGAN()
-    batch_size = 16
+    batch_size = 32
     itr = 0
     itr_total = 0
     max_itr_total = np.ceil(train_size*1.0 / batch_size + train_size*1.0 / batch_size / d_updates * g_updates)
@@ -187,7 +187,7 @@ if __name__ == '__main__':
     g_logs_mat = np.array(g_logs)
     d_r_logs_mat = np.array(d_r_logs)
     d_g_logs_mat = np.array(d_g_logs)
-    g_logs_names = ['d_g_acc', 'd_loss', 'g_logit_diff', 'g_out_diff', 'g_param_diff']
+    g_logs_names = ['g_d_acc', 'g_loss', 'g_logit_data', 'g_logit_diff', 'g_out_diff', 'g_param_diff']
     d_r_logs_names = ['d_r_acc', 'd_r_loss', 'd_r_logit_data', 'd_r_logit_diff', 'd_r_param_diff']
     d_g_logs_names = ['d_g_acc', 'd_g_loss', 'd_g_logit_data', 'd_g_logit_diff', 'd_g_param_diff']
 

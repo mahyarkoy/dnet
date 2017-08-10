@@ -23,9 +23,9 @@ class BabyGAN:
     def __init__(self):
         self.net = apollocaffe.ApolloNet()
         #self.d_state = adam.State()
-        #self.d_config = OptConfig(rho=0.5, eps=1e-6, lr=0.0002, clip=10.0)
+        #self.d_config = OptConfig(rho=0.5, eps=1e-6, lr=0.002, clip=10.0)
         #self.g_state = adam.State()
-        #self.g_config = OptConfig(rho=0.5, eps=1e-6, lr=0.0002, clip=10.0)
+        #self.g_config = OptConfig(rho=0.5, eps=1e-6, lr=0.02, clip=10.0)
         self.d_state = adadelta.State()
         self.d_config = OptConfig(rho=0.95, eps=1e-6, lr=1.0, clip=10.0)
         self.g_state = adadelta.State()
@@ -78,17 +78,20 @@ class BabyGAN:
         global_stats = True if phase == 'test' else False
         avg_momentum = 0.0 if phase == 'eval' else 0.95
 
-        net.f(InnerProduct(hlayer_1, h_size, bottoms=[bottom], param_names=[hw_1, hb_1]))
+        net.f(InnerProduct(hlayer_1, h_size, bottoms=[bottom], param_names=[hw_1, hb_1],
+            weight_filler=Filler("xavier")))
         #net.f(BatchNorm(bn_1, bottoms=[hlayer_1], param_names=[bn_m_1, bn_v_1, bn_c_1],
         #    use_global_stats = global_stats, moving_average_fraction=avg_momentum, param_lr_mults=[0.,0.,0.]))
         net.f(ReLU(relu_1, bottoms=[hlayer_1], negative_slope=0.2))
+        #net.f(TanH(relu_1, bottoms=[hlayer_1]))
 
         #net.f(InnerProduct(hlayer_2, h_size // 8, bottoms=[relu_1], param_names=[hw_2, hb_2]))
         #net.f(BatchNorm(bn_2, bottoms=[hlayer_2], param_names=['bn0', 'bn1', 'bn2'],
         #    use_global_stats = global_stats, moving_average_fraction=avg_momentum))
         #net.f(ReLU(relu_2, bottoms=[bn_2], negative_slope=0.2))
 
-        net.f(InnerProduct(logit, 1, bottoms=[relu_1], param_names=[w, b]))
+        net.f(InnerProduct(logit, 1, bottoms=[relu_1], param_names=[w, b],
+            weight_filler=Filler("xavier")))
         return logit
     
     '''
@@ -125,17 +128,20 @@ class BabyGAN:
         
         global_stats = True if phase == 'test' else False
         avg_momentum = 0.0 if phase == 'eval' else 0.95
-        net.f(InnerProduct(hlayer_1, h_size, bottoms=[bottom], param_names=[hw_1, hb_1]))
+        net.f(InnerProduct(hlayer_1, h_size, bottoms=[bottom], param_names=[hw_1, hb_1],
+            weight_filler=Filler("xavier")))
         #net.f(BatchNorm(bn_1, bottoms=[hlayer_1], param_names=[bn_m_1, bn_v_1, bn_c_1],
         #    use_global_stats = global_stats, moving_average_fraction=avg_momentum, param_lr_mults=[0.,0.,0.]))
         net.f(ReLU(relu_1, bottoms=[hlayer_1]))
+        #net.f(TanH(relu_1, bottoms=[hlayer_1]))
         
         #net.f(InnerProduct(hlayer_2, h_size // 8, bottoms=[relu_1], param_names=[hw_2, hb_2]))
         #net.f(BatchNorm(bn_1, bottoms=[hlayer_1], param_names=[bn_m_1, bn_v_1, bn_c_1],
         #    use_global_stats = global_stats, moving_average_fraction=avg_momentum, param_lr_mults=[0.,0.,0.]))
         #net.f(ReLU(relu_2, bottoms=[bn_2]))
         
-        net.f(InnerProduct(data, self.data_dim , bottoms=[relu_1], param_names=[w, b]))
+        net.f(InnerProduct(data, self.data_dim , bottoms=[relu_1], param_names=[w, b],
+            weight_filler=Filler("xavier")))
         return data
     
     '''
@@ -187,8 +193,8 @@ class BabyGAN:
                 param = net.params[param_name]
                 grad = param.diff * net.param_lr_mults(param_name)
                 param_sum += np.sum(np.square(grad))
-                count += 1
-        u_param_diff = param_sum / count
+                count += grad.size
+        u_param_diff = 1.0 * param_sum / count
         return [u_acc, u_loss, u_logit_data, u_logit_diff, u_param_diff]
         
     '''
@@ -228,6 +234,7 @@ class BabyGAN:
         ### update parameters with adam (no clipping)
         ### TODO: bring d_diff and g_diff out of update
         if update:
+            #adam.update(net, self.d_state, self.d_config, 'd_')
             adadelta.update(net, self.d_state, self.d_config, 'd_')
 
         return ([d_r_acc, d_r_loss, d_r_logit_data, d_r_logit_diff, d_r_param_diff],
@@ -254,6 +261,7 @@ class BabyGAN:
         ### logs
         d_g_acc = np.mean(net.blobs[g_logit].data < 0)
         g_loss = net.blobs[g_loss].data.item()
+        g_logit_data = np.mean(net.blobs[g_logit].data)
         g_logit_diff = np.mean(np.square(net.blobs[g_logit].diff))
         g_out_diff = np.mean(np.square(net.blobs[g_layer].diff))
         param_sum = 0.0
@@ -263,8 +271,8 @@ class BabyGAN:
                 param = net.params[param_name]
                 grad = param.diff * net.param_lr_mults(param_name)
                 param_sum += np.sum(np.square(grad))
-                count += 1
-        g_param_diff = param_sum / count
+                count += grad.size
+        g_param_diff = 1.0 * param_sum / count
         
         ### update parameters with adam (no clipping)
         if update:
@@ -273,7 +281,7 @@ class BabyGAN:
             net.clear_forward()
             g_layer = self.g_forward(self.g_name, self.g_var_name, z_layer, phase='eval')
         
-        return ([d_g_acc, g_loss, g_logit_diff, g_out_diff, g_param_diff], net.blobs[g_layer].data)
+        return ([d_g_acc, g_loss, g_logit_data, g_logit_diff, g_out_diff, g_param_diff], net.blobs[g_layer].data)
     
     '''
     If batch_data is not None: train disc and eval fixed gen and disc for one step

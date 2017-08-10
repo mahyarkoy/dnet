@@ -30,24 +30,17 @@ def update(net, state, config, update_param_key):
     epsilon = config.eps
     lr = config.lr
     clip = config.clip
-    update_param_names = [n for n in net.active_param_names() if n.startswith(update_param_key)]
-    key_norm = 0.0
-    off_key_norm = 0.0
-    key_count = 0.0
-    off_key_count = 0.0
-    for param_name in net.active_param_names():
-        if param_name.startswith(update_param_key):
-            param = net.params[param_name]
-            grad = param.diff * net.param_lr_mults(param_name)
-            key_norm += np.sum(np.square(grad))
-            key_count += 1
-        else:
-            param = net.params[param_name]
-            grad = param.diff * net.param_lr_mults(param_name)
-            off_key_norm += np.sum(np.square(grad))
-            off_key_count += 1
-    key_norm = key_norm / key_count
-    off_key_norm = off_key_norm / off_key_count
+    if update_param_key is None:
+        update_param_names = net.active_param_names()
+    else:
+        update_param_names = [n for n in net.active_param_names() if n.startswith(update_param_key)]
+    
+    all_norm = 0.
+    for param_name in update_param_names:
+        param = net.params[param_name]
+        grad = param.diff * net.param_lr_mults(param_name)
+        all_norm += np.sum(np.square(grad))
+    all_norm = np.sqrt(all_norm)
 
     for param_name in update_param_names:
         param = net.params[param_name]
@@ -65,11 +58,9 @@ def update(net, state, config, update_param_key):
             update = -lr / rms_grad * state.mean_grads[param_name]            
         else:
             state.sq_grads[param_name] = rho * np.square(grad)
-            state.mean_grads[param_name] = rho * np.square(grad)
+            state.mean_grads[param_name] = rho * grad
             rms_grad = np.sqrt(state.sq_grads[param_name] + epsilon)
             update = -lr / rms_grad * state.mean_grads[param_name]
 
         param.data[...] += update
         param.diff[...] = 0.0
-        
-    return key_norm, off_key_norm
