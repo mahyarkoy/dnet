@@ -27,9 +27,9 @@ class BabyGAN:
         #self.g_state = adam.State()
         #self.g_config = OptConfig(rho=0.5, eps=1e-6, lr=0.02, clip=10.0)
         self.d_state = adadelta.State()
-        self.d_config = OptConfig(rho=0.95, eps=1e-6, lr=1.0, clip=10.0)
+        self.d_config = OptConfig(rho=0.95, eps=1e-6, lr=1.0, clip=100.0)
         self.g_state = adadelta.State()
-        self.g_config = OptConfig(rho=0.95, eps=1e-6, lr=1.0, clip=10.0)
+        self.g_config = OptConfig(rho=0.95, eps=1e-6, lr=1.0, clip=100.0)
         
         self.d_var_name = 'd_var_name'
         self.d_name_real = 'd_name_real'
@@ -185,7 +185,7 @@ class BabyGAN:
         u_acc = np.mean(acc_sign * net.blobs[u_logit].data > 0)
         u_loss = net.blobs[u_loss].data.item()
         u_logit_data = np.mean(net.blobs[u_logit].data)
-        u_logit_diff = np.mean(np.square(net.blobs[u_logit].diff))
+        u_logit_diff = np.mean(np.square(net.blobs[u_logit].diff)) ** 0.5
         param_sum = 0.0
         count = 0.0
         for param_name in net.active_param_names():
@@ -194,7 +194,7 @@ class BabyGAN:
                 grad = param.diff * net.param_lr_mults(param_name)
                 param_sum += np.sum(np.square(grad))
                 count += grad.size
-        u_param_diff = 1.0 * param_sum / count
+        u_param_diff = (1.0 * param_sum / count) ** 0.5
         return [u_acc, u_loss, u_logit_data, u_logit_diff, u_param_diff]
         
     '''
@@ -262,8 +262,8 @@ class BabyGAN:
         d_g_acc = np.mean(net.blobs[g_logit].data < 0)
         g_loss = net.blobs[g_loss].data.item()
         g_logit_data = np.mean(net.blobs[g_logit].data)
-        g_logit_diff = np.mean(np.square(net.blobs[g_logit].diff))
-        g_out_diff = np.mean(np.square(net.blobs[g_layer].diff))
+        g_logit_diff = np.mean(np.square(net.blobs[g_logit].diff)) ** 0.5
+        g_out_diff = np.mean(np.square(net.blobs[g_layer].diff)) ** 0.5
         param_sum = 0.0
         count = 0.0
         for param_name in net.active_param_names():
@@ -272,7 +272,7 @@ class BabyGAN:
                 grad = param.diff * net.param_lr_mults(param_name)
                 param_sum += np.sum(np.square(grad))
                 count += grad.size
-        g_param_diff = 1.0 * param_sum / count
+        g_param_diff = (1.0 * param_sum / count) ** 0.5
         
         ### update parameters with adam (no clipping)
         if update:

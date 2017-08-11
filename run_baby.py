@@ -11,6 +11,9 @@ import baby_gan
 import matplotlib.pyplot as plt
 import os
 from progressbar import ETA, Bar, Percentage, ProgressBar
+from mpl_toolkits.mplot3d.axes3d import Axes3D, get_test_data
+from matplotlib import cm
+import matplotlib.tri as mtri
 
 log_path = 'baby_log'
 log_path_png = log_path+'/fields'
@@ -70,7 +73,7 @@ def plot_dataset(dataset, gt, title='Dataset'):
     return ax
 
 def baby_gan_field(baby, x_min, x_max, y_min, y_max, batch_size):
-    XX, YY = np.mgrid[x_min:x_max:200j, y_min:y_max:200j]
+    XX, YY = np.mgrid[x_min:x_max:80j, y_min:y_max:80j]
     data_mat = np.c_[XX.ravel(), YY.ravel()]
     logits = np.zeros(data_mat.shape[0])
     for batch_start in range(0, data_mat.shape[0], batch_size):
@@ -78,39 +81,62 @@ def baby_gan_field(baby, x_min, x_max, y_min, y_max, batch_size):
         batch_data = data_mat[batch_start:batch_end, ...]
         logits[batch_start:batch_end] = baby.step(batch_data, batch_size, dis_only=True)
     Z = logits.reshape(XX.shape)
-    return (XX, YY, Z, (x_min, x_max, y_min, y_max))
+    tri = mtri.Triangulation(XX.flatten(), YY.flatten())
+    return (XX, YY, Z, (x_min, x_max, y_min, y_max), tri)
 
 def plot_field(field_params, r_data, g_data, fignum, save_path, title):
     # plot the line, the points, and the nearest vectors to the plane
-    plt.figure(fignum, figsize=(10, 10))
+    fig = plt.figure(fignum, figsize=(12,20))
+    fig.clf()
+    ### top subplot: decision boundary
+    ax = fig.add_subplot(2, 1, 1)
+    ax.scatter(r_data[:, 0], r_data[:, 1], c='r', zorder=9, cmap=plt.cm.Paired, edgecolor='black')
+    ax.scatter(g_data[:, 0], g_data[:, 1], c='b', zorder=9, cmap=plt.cm.Paired, edgecolor='black')
+    
+    probs = 1.0 / (1.0 + np.exp(-field_params[2]))
+    z_min = 0.0
+    z_max = 1.0
+    dec = ax.pcolor(field_params[0], field_params[1], probs, cmap='coolwarm', vmin=z_min, vmax=z_max)
+    ax.axis([field_params[3][0], field_params[3][1], field_params[3][2], field_params[3][3]])
+    fig.colorbar(dec, shrink=0.5, aspect=10)
+    ax.contour(field_params[0], field_params[1], field_params[2], colors=['k', 'k', 'k'], linestyles=['--', '-', '--'],
+                levels=[-1.0, 0.0, 1.0])
+    ax.set_title(title+'_sig_boundary')
+
+    ### second subplot: logit score surface
+    ax = fig.add_subplot(2, 1, 2, projection='3d')
+    #surf = ax.plot_trisurf(field_params[0].flatten(), field_params[1].flatten(), field_params[2].flatten(),
+    #    triangles=field_params[4].triangles, cmap=cm.CMRmap, alpha=0.2)
+    surf = ax.plot_surface(field_params[0], field_params[1], field_params[2], rstride=1, cstride=1, cmap=cm.CMRmap,
+                       linewidth=1, antialiased=False, alpha=0.8)
+    #ax.set_zlim(-1.01, 1.01)
+    fig.colorbar(surf, shrink=0.5, aspect=10)
+    #cset = ax.contour(X, Y, Z, zdir='z', offset=-100, cmap=cm.coolwarm)
+    cset = ax.contour(field_params[0], field_params[1], field_params[2], zdir='x', offset=-20, cmap=cm.Spectral)
+    cset = ax.contour(field_params[0], field_params[1], field_params[2], zdir='y', offset=20, cmap=cm.Spectral)
+    ax.set_title(title+'_score_surf')
+
+    '''
+    plt.figure(fignum, figsize=(10, 12))
     plt.clf()
 
     plt.scatter(r_data[:, 0], r_data[:, 1], c='r', zorder=9, cmap=plt.cm.Paired, edgecolor='black')
     plt.scatter(g_data[:, 0], g_data[:, 1], c='b', zorder=9, cmap=plt.cm.Paired, edgecolor='black')
     
-    '''
-    plt.axis('tight')
-    plt.figure(fignum, figsize=(8, 6))
-    plt.pcolormesh(field_params[0], field_params[1], field_params[2] > 0, cmap=plt.cm.Paired)
-    plt.contour(field_params[0], field_params[1], field_params[2], colors=['k', 'k', 'k'], linestyles=['--', '-', '--'],
-                levels=[-.5, 0, .5])
-
-    plt.xlim(field_params[3][0], field_params[3][1])
-    plt.ylim(field_params[3][2], field_params[3][3])
-    '''
     probs = 1.0 / (1.0 + np.exp(-field_params[2]))
-    z_min = 0.0
-    z_max = 1.0
-    plt.pcolor(field_params[0], field_params[1], probs, cmap='coolwarm', vmin=z_min, vmax=z_max)
+    z_min = field_params[2].min()
+    z_max = field_params[2].max()
+    plt.pcolor(field_params[0], field_params[1], field_params[2], cmap='coolwarm', vmin=z_min, vmax=z_max)
     plt.axis([field_params[3][0], field_params[3][1], field_params[3][2], field_params[3][3]])
-    #plt.colorbar()
+    plt.colorbar()
     plt.contour(field_params[0], field_params[1], field_params[2], colors=['k', 'k', 'k'], linestyles=['--', '-', '--'],
                 levels=[-1.0, 0.0, 1.0])
     plt.title(title)
+    '''
 
-    plt.savefig(save_path)
+    fig.savefig(save_path)
 
-def plot_time_series(name, vals, fignum, save_path, color='b'):
+def plot_time_series(name, vals, fignum, save_path, color='b', ytype='linear'):
     plt.figure(fignum, figsize=(8, 6))
     plt.clf()
 
@@ -119,20 +145,22 @@ def plot_time_series(name, vals, fignum, save_path, color='b'):
     plt.title(name)
     plt.xlabel('Iterations')
     plt.ylabel('Values')
-
+    if ytype=='log':
+        plt.yscale('log')
     plt.savefig(save_path)
 
 def plot_time_mat(mat, mat_names, fignum, save_path):
     for n in range(mat.shape[1]):
         fig_name = mat_names[n]
-        plot_time_series(fig_name, mat[:,n], fignum, save_path+'/'+fig_name+'.png')
+        ytype = 'log' if 'param' in fig_name else 'linear'
+        plot_time_series(fig_name, mat[:,n], fignum, save_path+'/'+fig_name+'.png', ytype=ytype)
 
 if __name__ == '__main__':
     ### dataset definition
     train_size = 6400
     test_size = 100
 
-    centers = [[5,5], [-5,-5]]
+    centers = [[5,5], [-5,5]]
     stds = [[0.2, 0.2]] * 2
     labels = [0, 0]
     train_dataset, train_gt, test_dataset, test_gt = \
