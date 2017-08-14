@@ -125,7 +125,7 @@ class BabyGAN:
         
         h_size = 64
         net = self.net
-        
+
         global_stats = True if phase == 'test' else False
         avg_momentum = 0.0 if phase == 'eval' else 0.95
         net.f(InnerProduct(hlayer_1, h_size, bottoms=[bottom], param_names=[hw_1, hb_1],
@@ -141,7 +141,7 @@ class BabyGAN:
         #net.f(ReLU(relu_2, bottoms=[bn_2]))
         
         net.f(InnerProduct(data, self.data_dim , bottoms=[relu_1], param_names=[w, b],
-            weight_filler=Filler("xavier")))
+            weight_filler=Filler("xavier"), bias_filler=Filler("constant", 0.0)))
         return data
     
     '''
@@ -204,18 +204,18 @@ class BabyGAN:
     '''
     def d_one_step(self, r_layer, z_layer, batch_size, update=False, phase='train'):
         net = self.net
-        net.clear_forward()
+        self.clean_network()
         ### forward eval on real data
         d_r_acc, d_r_loss, d_r_logit_data, d_r_logit_diff, d_r_param_diff =\
             self.d_eval_step(r_layer, None, batch_size)
         
-        net.clear_forward()
+        self.clean_network()
         ### forward eval on gen data
         d_g_acc, d_g_loss, d_g_logit_data, d_g_logit_diff, d_g_param_diff =\
             self.d_eval_step(None, z_layer, batch_size)
         
         if phase == 'train':
-            net.clear_forward()
+            self.clean_network()
             ### forward generator and get the generated layer in data: batch_size*data_dim
             g_layer = self.g_forward(self.g_name, self.g_var_name, z_layer, phase='train')
             ### forward discriminator and get real/gen logits: batch_size*1
@@ -232,7 +232,6 @@ class BabyGAN:
             net.backward()
         
         ### update parameters with adam (no clipping)
-        ### TODO: bring d_diff and g_diff out of update
         if update:
             #adam.update(net, self.d_state, self.d_config, 'd_')
             adadelta.update(net, self.d_state, self.d_config, 'd_')
@@ -247,7 +246,7 @@ class BabyGAN:
     '''
     def g_one_step(self, z_layer, batch_size, update=False, phase='train'):
         net = self.net
-        net.clear_forward()
+        self.clean_network()
         
         ### forward generator and get the generated layer in data: batch_size*data_dim
         g_layer = self.g_forward(self.g_name, self.g_var_name, z_layer, phase=phase)
@@ -272,13 +271,13 @@ class BabyGAN:
                 grad = param.diff * net.param_lr_mults(param_name)
                 param_sum += np.sum(np.square(grad))
                 count += grad.size
-        g_param_diff = (1.0 * param_sum / count) ** 0.5
+        g_param_diff = (1.0 * param_sum / (count + 1e-5)) ** 0.5
         
         ### update parameters with adam (no clipping)
         if update:
             #adam.update(net, self.g_state, self.g_config, 'g_')
             adadelta.update(net, self.g_state, self.g_config, 'g_')
-            net.clear_forward()
+            self.clean_network()
             g_layer = self.g_forward(self.g_name, self.g_var_name, z_layer, phase='eval')
         
         return ([d_g_acc, g_loss, g_logit_data, g_logit_diff, g_out_diff, g_param_diff], net.blobs[g_layer].data)
@@ -287,10 +286,10 @@ class BabyGAN:
     If batch_data is not None: train disc and eval fixed gen and disc for one step
     If gen_update is True: train and eval gen for one step
     If dis_only is True: only get the logits for the disc given the batch_data 
-    '''    
+    '''   
     def step(self, batch_data, batch_size, gen_update=False, dis_only=False):
+        self.clean_network()
         net = self.net
-        net.clear_forward()
         r_layer = 'r_layer'
         z_layer = 'z_layer'
         
@@ -303,7 +302,7 @@ class BabyGAN:
                 return net.blobs[u_logit].data.flatten()
         
         ### sample z from uniform (-1,1)
-        z_data = np.random.uniform(low=-1.0, high=1.0, size=(batch_size,self.z_dim))
+        z_data = np.random.uniform(low=-1.0, high=1.0, size=(batch_size, self.z_dim))
         net.f(NumpyData(z_layer, z_data))
 
         ### run one training step on discriminator if batch_data is not None, otherwise on generator
@@ -318,6 +317,13 @@ class BabyGAN:
             logs = (g_logs, d_r_logs, d_g_logs) if batch_data is not None else (g_logs, None, None)
 
         return logs, g_data
+
+    def clean_network(self):
+        net = self.net
+        for par in net.active_param_names():
+            net.params[par].diff[...] = 0.0
+        net.clear_forward()
+
 
 
 

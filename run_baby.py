@@ -59,7 +59,7 @@ def generate_struct_data(data_size, lb, ub, std):
 def plot_dataset(dataset, gt, title='Dataset'):
     ### plot the dataset
     plt.figure(1,figsize=(8,6))
-    if gt == None:
+    if gt is None:
         gt = np.ones(dataset.shape[0])
     plt.scatter(dataset[:,0], dataset[:,1], c=gt.astype(int))
     plt.title(title)
@@ -108,7 +108,7 @@ def plot_field(field_params, r_data, g_data, fignum, save_path, title):
     #surf = ax.plot_trisurf(field_params[0].flatten(), field_params[1].flatten(), field_params[2].flatten(),
     #    triangles=field_params[4].triangles, cmap=cm.CMRmap, alpha=0.2)
     surf = ax.plot_surface(field_params[0], field_params[1], field_params[2], rstride=1, cstride=1, cmap=cm.CMRmap,
-                       linewidth=1, antialiased=False, alpha=0.8)
+                       linewidth=1, antialiased=False, alpha=0.6)
     #ax.set_zlim(-1.01, 1.01)
     fig.colorbar(surf, shrink=0.5, aspect=10)
     #cset = ax.contour(X, Y, Z, zdir='z', offset=-100, cmap=cm.coolwarm)
@@ -173,9 +173,9 @@ if __name__ == '__main__':
     d_g_logs = list()
 
     ### baby gan training
-    epochs = 2
+    epochs = 5
     d_updates = 128
-    g_updates = 20
+    g_updates = 50
     baby = baby_gan.BabyGAN()
     batch_size = 32
     itr = 0
