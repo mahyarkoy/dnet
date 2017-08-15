@@ -11,7 +11,7 @@ from collections import defaultdict, namedtuple
 import apollocaffe
 from apollocaffe.layers import *
 import adam, adadelta
-from pylayers import PyBackMultLayer
+from pylayers import PyBackMultLayer, PyWeightedMeanLoss
 import os
 
 apollocaffe.set_random_seed(0)
@@ -43,6 +43,8 @@ class BabyGAN:
 
         self.z_dim = 8
         self.data_dim = 2
+
+        self.loss_type = 'wass'
 
     '''
     Forward the discriminator with the given name
@@ -85,12 +87,12 @@ class BabyGAN:
         net.f(ReLU(relu_1, bottoms=[hlayer_1], negative_slope=0.2))
         #net.f(TanH(relu_1, bottoms=[hlayer_1]))
 
-        #net.f(InnerProduct(hlayer_2, h_size // 8, bottoms=[relu_1], param_names=[hw_2, hb_2]))
+        net.f(InnerProduct(hlayer_2, h_size // 8, bottoms=[relu_1], param_names=[hw_2, hb_2]))
         #net.f(BatchNorm(bn_2, bottoms=[hlayer_2], param_names=['bn0', 'bn1', 'bn2'],
         #    use_global_stats = global_stats, moving_average_fraction=avg_momentum))
-        #net.f(ReLU(relu_2, bottoms=[bn_2], negative_slope=0.2))
+        net.f(ReLU(relu_2, bottoms=[hlayer_2], negative_slope=0.2))
 
-        net.f(InnerProduct(logit, 1, bottoms=[relu_1], param_names=[w, b],
+        net.f(InnerProduct(logit, 1, bottoms=[relu_2], param_names=[w, b],
             weight_filler=Filler("xavier")))
         return logit
     
@@ -135,12 +137,12 @@ class BabyGAN:
         net.f(ReLU(relu_1, bottoms=[hlayer_1]))
         #net.f(TanH(relu_1, bottoms=[hlayer_1]))
         
-        #net.f(InnerProduct(hlayer_2, h_size // 8, bottoms=[relu_1], param_names=[hw_2, hb_2]))
+        net.f(InnerProduct(hlayer_2, h_size // 8, bottoms=[relu_1], param_names=[hw_2, hb_2]))
         #net.f(BatchNorm(bn_1, bottoms=[hlayer_1], param_names=[bn_m_1, bn_v_1, bn_c_1],
         #    use_global_stats = global_stats, moving_average_fraction=avg_momentum, param_lr_mults=[0.,0.,0.]))
-        #net.f(ReLU(relu_2, bottoms=[bn_2]))
+        net.f(ReLU(relu_2, bottoms=[hlayer_2]))
         
-        net.f(InnerProduct(data, self.data_dim , bottoms=[relu_1], param_names=[w, b],
+        net.f(InnerProduct(data, self.data_dim , bottoms=[relu_2], param_names=[w, b],
             weight_filler=Filler("xavier"), bias_filler=Filler("constant", 0.0)))
         return data
     
@@ -149,13 +151,19 @@ class BabyGAN:
     Input: name of logits layer (bottom), ground truth labels (gt), loss_weight (weight)
     Output: loss value
     '''
-    def log_loss(self, name, bottom, target, weight):
+    def log_loss(self, name, bottom, target, loss_weight, loss_type='log'):
         gt = 'loss_gt_%s' % name
         loss = 'loss_val_%s' % name
         
         net = self.net
-        net.f(NumpyData(gt, target))
-        net.f(SigmoidCrossEntropyLoss(loss, bottoms=[bottom, gt], loss_weight=weight))
+        if target == 0:
+            target = -1 if loss_type == 'wass' else 0
+        target_array = target * np.ones(net.blobs[bottom].shape)
+        net.f(NumpyData(gt, target_array))
+        if loss_type == 'wass':
+            net.f(PyWeightedMeanLoss(loss, bottoms=[bottom, gt], loss_weight=loss_weight))
+        else:
+            net.f(SigmoidCrossEntropyLoss(loss, bottoms=[bottom, gt], loss_weight=loss_weight))
         return loss
 
     '''
@@ -168,14 +176,14 @@ class BabyGAN:
         if r_layer:
             ### forward discriminator and get real logits: batch_size*1
             u_logit = self.d_forward(self.d_name_real, self.d_var_name, r_layer, phase='eval')
-            u_loss = self.log_loss(self.d_loss_name_real, u_logit, np.ones(batch_size), 1.0)
+            u_loss = self.log_loss(self.d_loss_name_real, u_logit, 1.0, loss_weight=1.0, loss_type=self.loss_type)
             acc_sign = 1.0
         elif z_layer:
             ### forward generator and get the generated layer in data: batch_size*data_dim
             u_layer = self.g_forward(self.g_name, self.g_var_name, z_layer, phase='eval')
             ### forward discriminator and get real logits: batch_size*1
             u_logit = self.d_forward(self.d_name_gen, self.d_var_name, u_layer, phase='eval')
-            u_loss = self.log_loss(self.d_loss_name_gen, u_logit, np.zeros(batch_size), 1.0)
+            u_loss = self.log_loss(self.d_loss_name_gen, u_logit, 0.0, loss_weight=1.0, loss_type=self.loss_type)
             acc_sign = -1.0
         else:
             raise ValueError('In d_eval_step: either z_layer or r_layer should have value other than None!')
@@ -223,8 +231,8 @@ class BabyGAN:
             g_logit = self.d_forward(self.d_name_gen, self.d_var_name, g_layer, phase='train')
             
             ### get losses and update discriminator variables only
-            d_r_loss = self.log_loss(self.d_loss_name_real, r_logit, np.ones(batch_size), 1.0)
-            d_g_loss = self.log_loss(self.d_loss_name_gen, g_logit, np.zeros(batch_size), 1.0)
+            d_r_loss = self.log_loss(self.d_loss_name_real, r_logit, 1.0, loss_weight=1.0, loss_type=self.loss_type)
+            d_g_loss = self.log_loss(self.d_loss_name_gen, g_logit, 0.0, loss_weight=1.0, loss_type=self.loss_type)
             
             d_r_loss = net.blobs[d_r_loss].data.item()
             d_g_loss = net.blobs[d_g_loss].data.item()
@@ -233,8 +241,8 @@ class BabyGAN:
         
         ### update parameters with adam (no clipping)
         if update:
-            #adam.update(net, self.d_state, self.d_config, 'd_')
-            adadelta.update(net, self.d_state, self.d_config, 'd_')
+            #adam.update(net, self.d_state, self.d_config, 'd_', self.loss_type)
+            adadelta.update(net, self.d_state, self.d_config, 'd_', self.loss_type)
 
         return ([d_r_acc, d_r_loss, d_r_logit_data, d_r_logit_diff, d_r_param_diff],
                 [d_g_acc, d_g_loss, d_g_logit_data, d_g_logit_diff, d_g_param_diff])
@@ -254,7 +262,7 @@ class BabyGAN:
         g_logit = self.d_forward(self.d_name_gen, self.d_var_name, g_layer, phase=phase)
         
         ### get loss and update generator variables only (argmax log D(G(z)) )
-        g_loss = self.log_loss(self.g_loss_name, g_logit, np.ones(batch_size), 1.0)
+        g_loss = self.log_loss(self.g_loss_name, g_logit, 1.0, loss_weight=1.0, loss_type=self.loss_type)
         net.backward()
         
         ### logs
@@ -275,8 +283,8 @@ class BabyGAN:
         
         ### update parameters with adam (no clipping)
         if update:
-            #adam.update(net, self.g_state, self.g_config, 'g_')
-            adadelta.update(net, self.g_state, self.g_config, 'g_')
+            #adam.update(net, self.g_state, self.g_config, 'g_', self.loss_type)
+            adadelta.update(net, self.g_state, self.g_config, 'g_', self.loss_type)
             self.clean_network()
             g_layer = self.g_forward(self.g_name, self.g_var_name, z_layer, phase='eval')
         

@@ -94,8 +94,10 @@ def plot_field(field_params, r_data, g_data, fignum, save_path, title):
     ax.scatter(g_data[:, 0], g_data[:, 1], c='b', zorder=9, cmap=plt.cm.Paired, edgecolor='black')
     
     probs = 1.0 / (1.0 + np.exp(-field_params[2]))
-    z_min = 0.0
-    z_max = 1.0
+    #z_min = 0.0
+    #z_max = 1.0
+    z_min = probs.min()
+    z_max = probs.max()
     dec = ax.pcolor(field_params[0], field_params[1], probs, cmap='coolwarm', vmin=z_min, vmax=z_max)
     ax.axis([field_params[3][0], field_params[3][1], field_params[3][2], field_params[3][3]])
     fig.colorbar(dec, shrink=0.5, aspect=10)
@@ -173,9 +175,9 @@ if __name__ == '__main__':
     d_g_logs = list()
 
     ### baby gan training
-    epochs = 5
-    d_updates = 128
-    g_updates = 50
+    epochs = 20
+    d_updates = 64
+    g_updates = 1
     baby = baby_gan.BabyGAN()
     batch_size = 32
     itr = 0
@@ -198,7 +200,7 @@ if __name__ == '__main__':
             d_g_logs.append(logs[2])
             ### calculate and plot field of decision
             field_params = baby_gan_field(baby, -20., 20., -20., 20., batch_size*10)
-            plot_field(field_params, batch_data, g_data, 0, log_path_png+'/field_%d.png' % itr_total, 'dis_update')
+            plot_field(field_params, batch_data, g_data, 0, log_path_png+'/field_%d.png' % itr_total, 'DIS_%d_%d' % (itr%d_updates, itr_total))
             itr += 1
             itr_total += 1
             ### generator updates: g_updates times for each d_updates of discriminator
@@ -208,7 +210,7 @@ if __name__ == '__main__':
                     g_logs.append(logs[0])
                     d_r_logs.append(logs[1])
                     d_g_logs.append(logs[2])
-                    plot_field(field_params, batch_data, g_data, 0, log_path_png+'/field_%d.png' % itr_total, 'gen_update')
+                    plot_field(field_params, batch_data, g_data, 0, log_path_png+'/field_%d.png' % itr_total, 'GEN_%d_%d' % (gn, itr_total))
                     itr_total += 1
 
     ### plot baby gan progress logs

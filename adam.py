@@ -25,7 +25,7 @@ class State:
         self.mean_grads = dict(updates_ld.items())
         self.sq_grads = dict(grads_ld.items())
 
-def update(net, state, config, update_param_key):
+def update(net, state, config, update_param_key=None, loss_type='log'):
     rho = config.rho
     epsilon = config.eps
     lr = config.lr
@@ -64,3 +64,8 @@ def update(net, state, config, update_param_key):
 
         param.data[...] += update
         param.diff[...] = 0.0
+
+        if loss_type == 'wass' and update_param_key == 'd_':
+            weight_clip = 0.1
+            param.data[param.data[...] > weight_clip] = weight_clip
+            param.data[param.data[...] < -weight_clip] = -weight_clip
