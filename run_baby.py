@@ -114,8 +114,8 @@ def plot_field(field_params, r_data, g_data, fignum, save_path, title):
     #ax.set_zlim(-1.01, 1.01)
     fig.colorbar(surf, shrink=0.5, aspect=10)
     #cset = ax.contour(X, Y, Z, zdir='z', offset=-100, cmap=cm.coolwarm)
-    cset = ax.contour(field_params[0], field_params[1], field_params[2], zdir='x', offset=-20, cmap=cm.Spectral)
-    cset = ax.contour(field_params[0], field_params[1], field_params[2], zdir='y', offset=20, cmap=cm.Spectral)
+    cset = ax.contour(field_params[0], field_params[1], field_params[2], zdir='x', offset=-5, cmap=cm.Spectral)
+    cset = ax.contour(field_params[0], field_params[1], field_params[2], zdir='y', offset=5, cmap=cm.Spectral)
     ax.set_title(title+'_score_surf')
 
     '''
@@ -168,6 +168,9 @@ if __name__ == '__main__':
     train_dataset, train_gt, test_dataset, test_gt = \
         generate_normal_data(train_size, test_size, centers, stds, labels)
     plot_dataset(train_dataset, train_gt, 'XOR Dataset')
+    train_mu = np.mean(train_dataset, axis=0)
+    train_std = np.std(train_dataset, axis=0)
+    train_dataset = (train_dataset - train_mu) / train_std
 
     ### logs initi
     g_logs = list()
@@ -175,7 +178,7 @@ if __name__ == '__main__':
     d_g_logs = list()
 
     ### baby gan training
-    epochs = 20
+    epochs = 10
     d_updates = 64
     g_updates = 1
     baby = baby_gan.BabyGAN()
@@ -183,11 +186,11 @@ if __name__ == '__main__':
     itr = 0
     itr_total = 0
     max_itr_total = np.ceil(train_size*1.0 / batch_size + train_size*1.0 / batch_size / d_updates * g_updates)
-    np.random.shuffle(train_dataset)
     widgets = ["baby_gan", Percentage(), Bar(), ETA()]
     pbar = ProgressBar(maxval=max_itr_total*epochs, widgets=widgets)
     pbar.start()
     for ep in range(epochs):
+        np.random.shuffle(train_dataset)
         print '>>> Epoch %d is started...' % ep
         ### discriminator update
         for batch_start in range(0, train_size, batch_size):
@@ -199,7 +202,7 @@ if __name__ == '__main__':
             d_r_logs.append(logs[1])
             d_g_logs.append(logs[2])
             ### calculate and plot field of decision
-            field_params = baby_gan_field(baby, -20., 20., -20., 20., batch_size*10)
+            field_params = baby_gan_field(baby, -5., 5., -5., 5., batch_size*10)
             plot_field(field_params, batch_data, g_data, 0, log_path_png+'/field_%d.png' % itr_total, 'DIS_%d_%d' % (itr%d_updates, itr_total))
             itr += 1
             itr_total += 1
@@ -212,6 +215,9 @@ if __name__ == '__main__':
                     d_g_logs.append(logs[2])
                     plot_field(field_params, batch_data, g_data, 0, log_path_png+'/field_%d.png' % itr_total, 'GEN_%d_%d' % (gn, itr_total))
                     itr_total += 1
+                #_, dis_confs, trace = baby.gen_consolidate(count=50)
+                #print '>>> CONFS: ', dis_confs
+                #print '>>> TRACE: ', trace
 
     ### plot baby gan progress logs
     g_logs_mat = np.array(g_logs)

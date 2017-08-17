@@ -140,3 +140,21 @@ class PyWeightedMeanLoss(PyLayer):
     ### grad: 1/N * gt
     def backward(self, top, bottom):
         bottom[0].diff[...] += -1.0 * self.loss_weight * bottom[1].data / bottom[0].shape[0]
+
+class PyUnitLoss(PyLayer):
+    def __init__(self, name, loss_weight=1.0, **kwargs):
+        PyLayer.__init__(self, name, dict(), **kwargs)
+        self.loss_weight = loss_weight
+
+    def reshape(self, bottom, top):
+        top[0].reshape((1,))
+
+    ### loss = sum (bottom)
+    def forward(self, bottom, top):
+        top[0].reshape((1,))
+        top[0].data[...] = loss_weight * np.sum(bottom[0].data)
+        return top[0].data.item()
+
+    ### grad: 1
+    def backward(self, top, bottom):
+        bottom[0].diff[...] += loss_weight

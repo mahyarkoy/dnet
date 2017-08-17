@@ -22,14 +22,14 @@ OptConfig = namedtuple('OptConfig', 'rho eps lr clip')
 class BabyGAN:
     def __init__(self):
         self.net = apollocaffe.ApolloNet()
-        #self.d_state = adam.State()
-        #self.d_config = OptConfig(rho=0.5, eps=1e-6, lr=0.002, clip=10.0)
-        #self.g_state = adam.State()
-        #self.g_config = OptConfig(rho=0.5, eps=1e-6, lr=0.02, clip=10.0)
-        self.d_state = adadelta.State()
-        self.d_config = OptConfig(rho=0.95, eps=1e-6, lr=1.0, clip=100.0)
-        self.g_state = adadelta.State()
-        self.g_config = OptConfig(rho=0.95, eps=1e-6, lr=1.0, clip=100.0)
+        self.d_state = adam.State()
+        self.d_config = OptConfig(rho=0.5, eps=1e-6, lr=0.02, clip=10.0)
+        self.g_state = adam.State()
+        self.g_config = OptConfig(rho=0.5, eps=1e-6, lr=0.02, clip=10.0)
+        #self.d_state = adadelta.State()
+        #self.d_config = OptConfig(rho=0.95, eps=1e-6, lr=1.0, clip=100.0)
+        #self.g_state = adadelta.State()
+        #self.g_config = OptConfig(rho=0.95, eps=1e-6, lr=1.0, clip=100.0)
         
         self.d_var_name = 'd_var_name'
         self.d_name_real = 'd_name_real'
@@ -45,6 +45,12 @@ class BabyGAN:
         self.data_dim = 2
 
         self.loss_type = 'wass'
+
+        self.fisher_info_list = list()
+        self.param_history = list()
+        self.max_memory = 5
+        self.gen_confs = np.zeros(self.max_memory)
+        self.gen_trace = np.zeros(self.max_memory)
 
     '''
     Forward the discriminator with the given name
@@ -87,7 +93,8 @@ class BabyGAN:
         net.f(ReLU(relu_1, bottoms=[hlayer_1], negative_slope=0.2))
         #net.f(TanH(relu_1, bottoms=[hlayer_1]))
 
-        net.f(InnerProduct(hlayer_2, h_size // 8, bottoms=[relu_1], param_names=[hw_2, hb_2]))
+        net.f(InnerProduct(hlayer_2, h_size, bottoms=[relu_1], param_names=[hw_2, hb_2],
+            weight_filler=Filler("xavier"), bias_filler=Filler("constant", 0.0)))
         #net.f(BatchNorm(bn_2, bottoms=[hlayer_2], param_names=['bn0', 'bn1', 'bn2'],
         #    use_global_stats = global_stats, moving_average_fraction=avg_momentum))
         net.f(ReLU(relu_2, bottoms=[hlayer_2], negative_slope=0.2))
@@ -137,7 +144,8 @@ class BabyGAN:
         net.f(ReLU(relu_1, bottoms=[hlayer_1]))
         #net.f(TanH(relu_1, bottoms=[hlayer_1]))
         
-        net.f(InnerProduct(hlayer_2, h_size // 8, bottoms=[relu_1], param_names=[hw_2, hb_2]))
+        net.f(InnerProduct(hlayer_2, h_size, bottoms=[relu_1], param_names=[hw_2, hb_2],
+            weight_filler=Filler("xavier"), bias_filler=Filler("constant", 0.0)))
         #net.f(BatchNorm(bn_1, bottoms=[hlayer_1], param_names=[bn_m_1, bn_v_1, bn_c_1],
         #    use_global_stats = global_stats, moving_average_fraction=avg_momentum, param_lr_mults=[0.,0.,0.]))
         net.f(ReLU(relu_2, bottoms=[hlayer_2]))
@@ -241,8 +249,8 @@ class BabyGAN:
         
         ### update parameters with adam (no clipping)
         if update:
-            #adam.update(net, self.d_state, self.d_config, 'd_', self.loss_type)
-            adadelta.update(net, self.d_state, self.d_config, 'd_', self.loss_type)
+            adam.update(net, self.d_state, self.d_config, 'd_', self.loss_type)
+            #adadelta.update(net, self.d_state, self.d_config, 'd_', self.loss_type)
 
         return ([d_r_acc, d_r_loss, d_r_logit_data, d_r_logit_diff, d_r_param_diff],
                 [d_g_acc, d_g_loss, d_g_logit_data, d_g_logit_diff, d_g_param_diff])
@@ -283,8 +291,10 @@ class BabyGAN:
         
         ### update parameters with adam (no clipping)
         if update:
-            #adam.update(net, self.g_state, self.g_config, 'g_', self.loss_type)
-            adadelta.update(net, self.g_state, self.g_config, 'g_', self.loss_type)
+            adam.update(net, self.g_state, self.g_config, 'g_', self.loss_type)
+            #adadelta.update(net, self.g_state, self.g_config, 'g_', self.loss_type,
+            #    self.gen_confs, self.gen_trace, self.fisher_info_list, self.param_history)
+            #adadelta.update(net, self.g_state, self.g_config, 'g_', self.loss_type)
             self.clean_network()
             g_layer = self.g_forward(self.g_name, self.g_var_name, z_layer, phase='eval')
         
@@ -310,7 +320,7 @@ class BabyGAN:
                 return net.blobs[u_logit].data.flatten()
         
         ### sample z from uniform (-1,1)
-        z_data = np.random.uniform(low=-1.0, high=1.0, size=(batch_size, self.z_dim))
+        z_data = np.random.uniform(low=-2.0, high=2.0, size=(batch_size, self.z_dim))
         net.f(NumpyData(z_layer, z_data))
 
         ### run one training step on discriminator if batch_data is not None, otherwise on generator
@@ -325,6 +335,69 @@ class BabyGAN:
             logs = (g_logs, d_r_logs, d_g_logs) if batch_data is not None else (g_logs, None, None)
 
         return logs, g_data
+
+    '''
+    Updates stored fisher information variables which are used in gen_updates to consolidate previous gens
+    Returns the current gen_conf
+    Use it like a check point when you want to consolidate a desirable gen weights
+    '''
+    def gen_consolidate(self, count=50):
+        net = self.net
+        self.clean_network()
+        z_layer = 'z_layer'
+        sig_layer = 'sig_layer'
+        unit_loss = 'unit_loss'
+        gen_conf = 0.0
+        fisher_info = dict()
+
+        ### check confidence of generator: replace the previous gen with lowest confidence
+        z_data = np.random.uniform(low=-1.0, high=1.0, size=(count, self.z_dim))
+        net.f(NumpyData(z_layer, z_data))
+        g_layer = self.g_forward(self.g_name, self.g_var_name, z_layer, phase='eval')
+        g_logit = self.d_forward(self.d_name_gen, self.d_var_name, g_layer, phase='eval')
+        net.f(Sigmoid(sig_layer, bottoms=[g_logit]))
+        
+        ### mean_z sig(D(G(z))) as the confidence/usefulness of current generator
+        gen_conf = max(np.mean(net.blobs[sig_layer].data) * 2, 0.99)
+        dis_confs = self.gen_confs ** self.gen_trace
+        min_conf_id = np.argmin(dis_confs)
+        if gen_conf < self.dis_confs[min_conf_id]: ## NOTE: correct because gen_confs inits to 0
+            return
+
+        ### mean_z gen_param_diff^2 as a measure of importance of each param in current gen
+        for n in range(count):
+            self.clean_network()
+            z_data = np.random.uniform(low=-1.0, high=1.0, size=(1, self.z_dim))
+            net.f(NumpyData(z_layer, z_data))
+            g_layer = self.g_forward(self.g_name, self.g_var_name, z_layer, phase='eval')
+            g_logit = self.d_forward(self.d_name_gen, self.d_var_name, g_layer, phase='eval')
+            net.f(PyUnitLoss(unit_loss, bottoms=[g_logit]))
+            net.backward()
+            ### collect fisher info
+            for p in net.active_param_names():
+                if not p.startswith('g_'):
+                    continue
+                if n == 0:
+                    fisher_info[p] = net.params[p].diff ** 2
+                    param_data[p] = net.params[p].data
+                else:
+                    fisher_info[p] += net.params[p].diff ** 2
+        for p in fisher_info.keys():
+            fisher_info[p] /= 1.0 * count
+
+        memory_len = len(self.fisher_info_list)
+        if memory_len == self.max_memory:
+            self.gen_confs[min_conf_id] = gen_conf
+            self.gen_trace[min_conf_id] = 0.0
+            self.fisher_info_list[min_conf_id] = fisher_info
+            self.param_history[min_conf_id] = param_data
+        else:
+            self.gen_confs[memory_len] = gen_conf
+            self.gen_trace[memory_len] = 0.0 ## Redundant, for clarity
+            self.fisher_info_list.append(fisher_info)
+            self.param_history.append(param_data)
+        self.gen_trace += 1
+        return gen_conf, dis_confs, self.gen_trace
 
     def clean_network(self):
         net = self.net

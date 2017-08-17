@@ -25,7 +25,7 @@ class State:
         self.sq_updates = dict(updates_ld.items())
         self.sq_grads = dict(grads_ld.items())
 
-def update(net, state, config, update_param_key=None, loss_type='log'):
+def update(net, state, config, update_param_key=None, loss_type='log', confs=None, trace=None, fisher_list=None, param_history=None):
     rho = config.rho
     epsilon = config.eps
     lr = config.lr
@@ -44,7 +44,17 @@ def update(net, state, config, update_param_key=None, loss_type='log'):
 
     for param_name in update_param_names:
         param = net.params[param_name]
-        grad = param.diff * net.param_lr_mults(param_name)
+        ### elastic weight update
+        threshold = 1e-5
+        if update_param_key == 'g_' and confs is not None:
+            dis_confs = confs ** trace
+            for i, v in enumerate(dis_confs):
+                if v < threshold:
+                    continue
+                elastic_grad = 2*v*fisher_list[i][param_name]*(param.data - param_history[i][param_name])
+            grad = (param.diff+elastic_grad) * net.param_lr_mults(param_name)
+        else:
+            grad = param.diff * net.param_lr_mults(param_name)
 
         if all_norm > clip:
             grad = clip * grad / all_norm
@@ -54,7 +64,7 @@ def update(net, state, config, update_param_key=None, loss_type='log'):
                 (1 - rho) * np.square(grad) + rho * state.sq_grads[param_name]
             rms_update = np.sqrt(state.sq_updates[param_name] + epsilon)
             rms_grad = np.sqrt(state.sq_grads[param_name] + epsilon)
-            update = -rms_update / rms_grad * grad
+            update = rms_update / rms_grad * grad
 
             state.sq_updates[param_name] = \
                 (1 - rho) * np.square(update) + rho * state.sq_updates[param_name]
@@ -64,9 +74,11 @@ def update(net, state, config, update_param_key=None, loss_type='log'):
                     state.sq_grads[param_name]) * grad
             state.sq_updates[param_name] = (1 - rho) * np.square(update)
 
-        param.data[...] += lr * update
-        param.diff[...] = 0
+
+        param.data[...] -= lr * update
+        param.diff[...] = 0.0
         if loss_type == 'wass' and update_param_key == 'd_':
-            weight_clip = 0.1
+            weight_clip = 0.05
             param.data[param.data[...] > weight_clip] = weight_clip
             param.data[param.data[...] < -weight_clip] = -weight_clip
+
