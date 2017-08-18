@@ -179,8 +179,8 @@ if __name__ == '__main__':
 
     ### baby gan training
     epochs = 10
-    d_updates = 64
-    g_updates = 1
+    d_updates = 128
+    g_updates = 10
     baby = baby_gan.BabyGAN()
     batch_size = 32
     itr = 0

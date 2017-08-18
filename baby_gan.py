@@ -22,14 +22,18 @@ OptConfig = namedtuple('OptConfig', 'rho eps lr clip')
 class BabyGAN:
     def __init__(self):
         self.net = apollocaffe.ApolloNet()
-        self.d_state = adam.State()
-        self.d_config = OptConfig(rho=0.5, eps=1e-6, lr=0.02, clip=10.0)
-        self.g_state = adam.State()
-        self.g_config = OptConfig(rho=0.5, eps=1e-6, lr=0.02, clip=10.0)
-        #self.d_state = adadelta.State()
-        #self.d_config = OptConfig(rho=0.95, eps=1e-6, lr=1.0, clip=100.0)
-        #self.g_state = adadelta.State()
-        #self.g_config = OptConfig(rho=0.95, eps=1e-6, lr=1.0, clip=100.0)
+        self.update_type = 'adadelta'
+        self.loss_type = 'log'
+        if self.update_type == 'adam':
+            self.d_state = adam.State()
+            self.d_config = OptConfig(rho=0.5, eps=1e-6, lr=0.02, clip=10.0)
+            self.g_state = adam.State()
+            self.g_config = OptConfig(rho=0.5, eps=1e-6, lr=0.02, clip=10.0)
+        else:
+            self.d_state = adadelta.State()
+            self.d_config = OptConfig(rho=0.95, eps=1e-6, lr=1.0, clip=100.0)
+            self.g_state = adadelta.State()
+            self.g_config = OptConfig(rho=0.95, eps=1e-6, lr=1.0, clip=100.0)
         
         self.d_var_name = 'd_var_name'
         self.d_name_real = 'd_name_real'
@@ -43,8 +47,6 @@ class BabyGAN:
 
         self.z_dim = 8
         self.data_dim = 2
-
-        self.loss_type = 'wass'
 
         self.fisher_info_list = list()
         self.param_history = list()
@@ -249,8 +251,10 @@ class BabyGAN:
         
         ### update parameters with adam (no clipping)
         if update:
-            adam.update(net, self.d_state, self.d_config, 'd_', self.loss_type)
-            #adadelta.update(net, self.d_state, self.d_config, 'd_', self.loss_type)
+            if self.update_type == 'adam':
+                adam.update(net, self.d_state, self.d_config, 'd_', self.loss_type)
+            else:
+                adadelta.update(net, self.d_state, self.d_config, 'd_', self.loss_type)
 
         return ([d_r_acc, d_r_loss, d_r_logit_data, d_r_logit_diff, d_r_param_diff],
                 [d_g_acc, d_g_loss, d_g_logit_data, d_g_logit_diff, d_g_param_diff])
@@ -291,10 +295,12 @@ class BabyGAN:
         
         ### update parameters with adam (no clipping)
         if update:
-            adam.update(net, self.g_state, self.g_config, 'g_', self.loss_type)
+            if self.update_type == 'adam':
+                adam.update(net, self.g_state, self.g_config, 'g_', self.loss_type)
+            else:
+                adadelta.update(net, self.g_state, self.g_config, 'g_', self.loss_type)
             #adadelta.update(net, self.g_state, self.g_config, 'g_', self.loss_type,
             #    self.gen_confs, self.gen_trace, self.fisher_info_list, self.param_history)
-            #adadelta.update(net, self.g_state, self.g_config, 'g_', self.loss_type)
             self.clean_network()
             g_layer = self.g_forward(self.g_name, self.g_var_name, z_layer, phase='eval')
         
