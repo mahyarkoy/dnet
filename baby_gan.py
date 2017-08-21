@@ -20,15 +20,15 @@ apollocaffe.set_device(0)
 OptConfig = namedtuple('OptConfig', 'rho eps lr clip')
 
 class BabyGAN:
-    def __init__(self):
+    def __init__(self, data_dim=2):
         self.net = apollocaffe.ApolloNet()
-        self.update_type = 'adadelta'
+        self.update_type = 'adam'
         self.loss_type = 'log'
         if self.update_type == 'adam':
             self.d_state = adam.State()
-            self.d_config = OptConfig(rho=0.5, eps=1e-6, lr=0.02, clip=10.0)
+            self.d_config = OptConfig(rho=0.5, eps=1e-6, lr=0.0002, clip=10.0)
             self.g_state = adam.State()
-            self.g_config = OptConfig(rho=0.5, eps=1e-6, lr=0.02, clip=10.0)
+            self.g_config = OptConfig(rho=0.5, eps=1e-6, lr=0.0002, clip=10.0)
         else:
             self.d_state = adadelta.State()
             self.d_config = OptConfig(rho=0.95, eps=1e-6, lr=1.0, clip=100.0)
@@ -46,7 +46,7 @@ class BabyGAN:
         self.g_loss_name = 'g_loss_name'
 
         self.z_dim = 8
-        self.data_dim = 2
+        self.data_dim = data_dim
 
         self.fisher_info_list = list()
         self.param_history = list()
@@ -89,7 +89,7 @@ class BabyGAN:
         avg_momentum = 0.0 if phase == 'eval' else 0.95
 
         net.f(InnerProduct(hlayer_1, h_size, bottoms=[bottom], param_names=[hw_1, hb_1],
-            weight_filler=Filler("xavier")))
+            weight_filler=Filler("xavier"), bias_filler=Filler("constant", 0.0)))
         #net.f(BatchNorm(bn_1, bottoms=[hlayer_1], param_names=[bn_m_1, bn_v_1, bn_c_1],
         #    use_global_stats = global_stats, moving_average_fraction=avg_momentum, param_lr_mults=[0.,0.,0.]))
         net.f(ReLU(relu_1, bottoms=[hlayer_1], negative_slope=0.2))
@@ -140,7 +140,7 @@ class BabyGAN:
         global_stats = True if phase == 'test' else False
         avg_momentum = 0.0 if phase == 'eval' else 0.95
         net.f(InnerProduct(hlayer_1, h_size, bottoms=[bottom], param_names=[hw_1, hb_1],
-            weight_filler=Filler("xavier")))
+            weight_filler=Filler("xavier"), bias_filler=Filler("constant", 0.0)))
         #net.f(BatchNorm(bn_1, bottoms=[hlayer_1], param_names=[bn_m_1, bn_v_1, bn_c_1],
         #    use_global_stats = global_stats, moving_average_fraction=avg_momentum, param_lr_mults=[0.,0.,0.]))
         net.f(ReLU(relu_1, bottoms=[hlayer_1]))

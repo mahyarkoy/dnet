@@ -54,18 +54,16 @@ def update(net, state, config, update_param_key=None, loss_type='log'):
                 rho * np.square(grad) + (1 - rho) * state.sq_grads[param_name]
             state.mean_grads[param_name] = \
                 rho * grad + (1 - rho) * state.mean_grads[param_name]
-            rms_grad = np.sqrt(state.sq_grads[param_name] + epsilon)
-            update = -lr / rms_grad * state.mean_grads[param_name]            
         else:
             state.sq_grads[param_name] = rho * np.square(grad)
             state.mean_grads[param_name] = rho * grad
-            rms_grad = np.sqrt(state.sq_grads[param_name] + epsilon)
-            update = -lr / rms_grad * state.mean_grads[param_name]
+            
+        rms_grad = np.sqrt(state.sq_grads[param_name] + epsilon)
+        update = 1.0 / rms_grad * state.mean_grads[param_name]
 
-        param.data[...] += update
+        param.data[...] -= lr * update
         param.diff[...] = 0.0
-
         if loss_type == 'wass' and update_param_key == 'd_':
-            weight_clip = 0.1
+            weight_clip = 0.05
             param.data[param.data[...] > weight_clip] = weight_clip
             param.data[param.data[...] < -weight_clip] = -weight_clip
