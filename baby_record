@@ -1,0 +1,39 @@
+1: centers(5,5,-5,-5), adam(d0.002, g0.02), g(hidden1/relu), d(hidden1/relu), (d can't cut the gens out, g cant pass the zero boundary of logit vals)
+2: centers(5,5,-5,5), adagrad(d0.002, g0.02), g(hidden1/relu), d(hidden1/relu), (d can't cut the gens out, g cant pass the zero boundary of logit vals)
+3: centers(5,5,-5,5), adagrad(d0.002, g0.02), g(deterministic 0,0), d(hidden1/relu), (d can cut g perfectly)
+4: centers(5,5,-5,5), adagrad(d0.002, g0.02), g(constant 0,0), d(hidden1/relu), (d can cut g perfectly, bug fixed.)
+5: centers(5,5,-5,5), adagrad(d0.002, g0.02), g(hidden1/relu), d(hidden1/relu), (d can cut the gens out, g can pass the zero boundary of logit vals, everything works!)
+6: centers(5,5,-5,5), adagrad(d0.002, g0.02), g(hidden1:64/relu/hidden2:8/relu), d(hidden1:64/lrelu:0.2/hidden2:8/lrelu:0.2), (d can cut the gens out, g can pass the zero boundary of logit vals, everything works!)
+7W: centers(5,5,-5,5), adadelta, g(hidden1:64/relu/hidden2:8/relu), d(hidden1:64/lrelu:0.2/hidden2:8/lrelu:0.2), z=8
+8W: centers(5,5,-5,5), adadelta, g(hidden1:64/relu/hidden2:8/relu), d(hidden1:64/lrelu:0.2/hidden2:8/lrelu:0.2), z=1
+9W: centers(5,5,-5,5), adam, g(hidden1:64/relu/hidden2:8/relu), d(hidden1:64/lrelu:0.2/hidden2:8/lrelu:0.2), z=8, epoch=20, g_update=1, d_updates=64
+10: centers(5,5,-5,5), adadelta, g(hidden1:64/relu/hidden2:8/relu), d(hidden1:64/lrelu:0.2/hidden2:8/lrelu:0.2), z=8, epoch=10, g_update=50, d_updates=128, g/r_loss_weight=10
+11W: centers(5,5,-5,5)/norm, adadelta, g(hidden1:64/relu/hidden2:8/relu), d(hidden1:64/lrelu:0.2/hidden2:8/lrelu:0.2), z=8, epoch=10, g_update=2, d_updates=64, g/r_loss_weight=1
+12W: centers(5,5,-5,5)/norm, adam, g(hidden1:64/relu/hidden2:64/relu), d(hidden1:64/lrelu:0.2/hidden2:64/lrelu:0.2), z=8, epoch=10, g_update=2, d_updates=64, g/r_loss_weight=1
+13: centers(5,5,-5,5)/norm, adadelta, g(hidden1:64/relu/hidden2:64/relu), d(hidden1:64/lrelu:0.2/hidden2:64/lrelu:0.2), z_dim=8, epoch=10, g_update=10, d_updates=128, g/r_loss_weight=1, z=2.0
+14_1d: centers(5)/norm, adadelta, g(hidden1:64/relu/hidden2:64/relu), d(hidden1:64/lrelu:0.2/hidden2:64/lrelu:0.2), z_dim=8, epoch=10, g_update=10, d_updates=64, g/r_loss_weight=1, z=2.0
+15_1d: centers(2), adam, g(hidden1:64/relu/hidden2:64/relu), d(hidden1:64/lrelu:0.2/hidden2:64/lrelu:0.2), z_dim=8, epoch=100, g_update=10, d_updates=64, g/r_loss_weight=1, z=2.0
+16_1d: centers(2), adam, g(hidden1:64/relu), d(hidden1:128/lrelu:0.2/hidden2:128/lrelu:0.2), z_dim=8, epoch=100, g_update=10, d_updates=64, g/r_loss_weight=1, z=2.0
+17_1d: centers(2), adam, g(hidden1:128/relu/hidden2:128/relu), d(hidden1:128/lrelu:0.2/hidden2:128/lrelu:0.2), z_dim=8, epoch=100, g_update=10, d_updates=64, g/r_loss_weight=1, z=2.0
+18_1d: centers(2), adam, g(hidden1:128/relu/hidden2:128/relu), d(hidden1:128/lrelu:0.2/hidden2:128/lrelu:0.2), z_dim=8, epoch=100, g_update=10, d_updates=64, g/r_loss_weight=1, z=1.0
+19_1d: centers(2), adam, g(hidden1:64/relu), d(*0.25/hidden1:128/lrelu:0.2/hidden2:128/lrelu:0.2), z_dim=8, epoch=100, g_update=10, d_updates=64, g/r_loss_weight=1, z=1.0
+20_1d: centers(2), adam, g(hidden1:128/relu/hidden2:128/relu), d(*0.25/hidden1:64/lrelu:0.2), z_dim=8, epoch=50, g_update=10, d_updates=64, g/r_loss_weight=1, z=1.0
+21_1d: centers(-2), adam, g(hidden1:64/relu), d(hidden1:128/lrelu:0.2/hidden2:128/lrelu:0.2), z_dim=8, epoch=100, g_update=1, d_updates=1, g/r_loss_weight=1, z=4.0
+22_1d: centers(-2), adam, g(hidden1:64/relu), d(hidden1:128/lrelu:0.2/hidden2:128/lrelu:0.2), z_dim=8, epoch=100, g_update=1, d_updates=1, g/r_loss_weight=1, z=4.0, sampling_dataset
+23_1d: centers(-2), adam, g(hidden1:64/tanh), d(hidden1:128/tanh/hidden2:128/tanh), z_dim=8, epoch=50, g_update=1, d_updates=1, g/r_loss_weight=1, z=4.0, sampling_dataset
+24_1d: centers(-2, 2), adam, g(hidden1:64/tanh), d(hidden1:128/tanh/hidden2:128/tanh), z_dim=8, epoch=20, g_update=1, d_updates=1, g/r_loss_weight=1, z=4.0, sampling_dataset
+25_1d: centers(-2, 2), adam, g(hidden1:128/tanh/hidden2:128/tanh), d(hidden1:128/tanh/hidden2:128/tanh), z_dim=8, epoch=20, g_update=1, d_updates=1, g/r_loss_weight=1, z=4.0, sampling_dataset
+26_1d: centers(-2, 2), adam, g(hidden1:128/relu/hidden2:128/relu), d(hidden1:128/lrelu:0.2/hidden2:128/lrelu:0.2), z_dim=8, epoch=20, g_update=1, d_updates=1, g/r_loss_weight=1, z=4.0, sampling_dataset
+27_1d: centers(-2, 2), adam, g(hidden1:128/tanh/hidden2:128/tanh), d(hidden1:128/tanh/hidden2:128/tanh), z_dim=8, epoch=20, g_update=1, d_updates=1, g/r_loss_weight=1, z=4.0, sampling_dataset, same as 25
+28_1d: centers(-2, 2), adam, g(hidden1:128/tanh)^4, d(hidden1:128/tanh)^4, z_dim=8, epoch=100, g_update=1, d_updates=1, g/r_loss_weight=1, z=4.0, sampling_dataset
+29_1d: centers(-2, 2), adadelta, g(hidden1:128/relu/hidden2:128/relu), d(hidden1:128/lrelu:0.2/hidden2:128/lrelu:0.2), z_dim=8, epoch=20, g_update=10, d_updates=64, g/r_loss_weight=1, z=4.0
+30_1d: centers(-2, 2), adadelta(clip:100), g(hidden1:128/relu/hidden2:128/relu), d(hidden1:128/lrelu:0.2/hidden2:128/lrelu:0.2), z_dim=8, epoch=20, g_update=1, d_updates=64, g/r_loss_weight=1, z=4.0
+31_1d: centers(-2, 2), adadelta(clip:100), g(hidden1:128/relu/hidden2:128/relu), d(hidden1:128/lrelu:0.2/hidden2:128/lrelu:0.2), z_dim=8, epoch=20, g_update=1, d_updates=1, g/r_loss_weight=1, z=4.0
+32_1d: centers(-2, 2), adadelta(clip:10), g(hidden1:128/relu/hidden2:128/relu), d(hidden1:128/lrelu:0.2/hidden2:128/lrelu:0.2), z_dim=8, epoch=20, g_update=1, d_updates=64, g/r_loss_weight=1, z=4.0
+33_1d: centers(-4, 2), adam, g(hidden1:128/relu/hidden2:128/relu), d(hidden1:128/lrelu:0.2/hidden2:128/lrelu:0.2), z_dim=8, epoch=20, g_update=1, d_updates=1, g/r_loss_weight=1, z=4.0
+34_1d: centers(-2:0.2, 2:0.2), adam, g(hidden1:128/relu/hidden2:128/relu), d(hidden1:128/lrelu:0.2/hidden2:128/lrelu:0.2), z_dim=8, epoch=20, g_update=1, d_updates=64, g/r_loss_weight=1, z=4.0
+35_1d: centers(-2:0.05, 2:0.2), adam, g(hidden1:128/relu/hidden2:128/relu), d(hidden1:128/lrelu:0.2/hidden2:128/lrelu:0.2), z_dim=8, epoch=20, g_update=1, d_updates=1, g/r_loss_weight=1, z=4.0
+36_1d: centers(-0.5:0.1, 1:0.1), adam, g(hidden1:128/relu/hidden2:128/relu), d(hidden1:128/lrelu:0.2/hidden2:128/lrelu:0.2), z_dim=8, epoch=50, g_update=1, d_updates=1, g/r_loss_weight=1, z=4.0
+37_1d: centers(-2:0.2, 2:0.2), adam, g(hidden1:128/relu/hidden2:128/relu), d(hidden1:128/lrelu:0.2/hidden2:128/lrelu:0.2), z_dim=8, epoch=50, g_update=10, d_updates=1, g/r_loss_weight=1, z=4.0
+38_1d: centers(-0.5:0.05, 2:0.05), adam, g(hidden1:128/relu/hidden2:128/relu), d(hidden1:128/lrelu:0.2/hidden2:128/lrelu:0.2), z_dim=8, epoch=20, g_update=1, d_updates=1, g/r_loss_weight=1, z=4.0
+

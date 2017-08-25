@@ -46,7 +46,8 @@ target = np.zeros(3) + 1
 #input_data = -0.5*np.ones(3)
 input_data = np.array([10.,20.,30.])
 input_data = input_data.reshape((3,1))
-net.f(NumpyData(idata, input_data))
+net.f(NumpyData('pp', input_data))
+net.f(Power(idata, bottoms=['pp'], scale=100))
 net.f(NumpyData(gt, target))
 net.f(InnerProduct(output, 1, bottoms=[idata], param_names=[wi, bi],
                    weight_filler=Filler('constant', 1.0), bias_filler=Filler('constant', 0.0)))

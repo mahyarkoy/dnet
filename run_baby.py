@@ -5,6 +5,8 @@ Created on Tue Aug  8 11:10:34 2017
 
 @author: mahyar
 """
+### To convert to mp4 in command line
+# ffmpeg -framerate 25 -i fields/field_%d.png -c:v libx264 -pix_fmt yuv420p baby_log_15.mp4
 
 import numpy as np
 import baby_gan
@@ -15,8 +17,12 @@ from mpl_toolkits.mplot3d.axes3d import Axes3D, get_test_data
 from matplotlib import cm
 import matplotlib.tri as mtri
 from sklearn.neighbors.kde import KernelDensity
+import argparse
 
-log_path = 'baby_log'
+arg_parser = argparse.ArgumentParser()
+arg_parser.add_argument('-l', '--log-path', dest='log_path', required=True, help='log directory to store logs.')
+args = arg_parser.parse_args()
+log_path = args.log_path
 log_path_png = log_path+'/fields'
 os.system('mkdir -p '+log_path_png)
 
@@ -96,7 +102,7 @@ def baby_gan_field_1d(baby, x_min, x_max, batch_size):
     return (data_mat, logits, (x_min, x_max))
 
 
-def plot_field_2d(field_params, r_data, g_data, fignum, save_path, title):
+def plot_field_2d(field_params, (r_data, br_data), (g_data, bg_data), fignum, save_path, title):
     # plot the line, the points, and the nearest vectors to the plane
     fig = plt.figure(fignum, figsize=(12,20))
     fig.clf()
@@ -131,7 +137,7 @@ def plot_field_2d(field_params, r_data, g_data, fignum, save_path, title):
     
     fig.savefig(save_path)
 
-def plot_field_1d(field_params, r_data, g_data, fignum, save_path, title):
+def plot_field_1d(field_params, (r_data, br_data), (g_data, bg_data), fignum, save_path, title):
     ### Estimate densities for real and generated data
     kde = KernelDensity(kernel='gaussian', bandwidth=0.2).fit(r_data)
     r_dens = np.exp(kde.score_samples(field_params[0]))
@@ -144,9 +150,9 @@ def plot_field_1d(field_params, r_data, g_data, fignum, save_path, title):
 
     ### top subplot: decision boundary and prob densities
     ax = fig.add_subplot(2, 1, 1)
-    y_data = np.zeros(r_data.shape)
-    ax.scatter(r_data, y_data, c='r', zorder=9, edgecolor='black', marker='+')
-    ax.scatter(g_data, y_data, c='b', zorder=9, edgecolor='black', marker='+')
+    y_data = np.zeros(br_data.shape)
+    ax.scatter(br_data, y_data, c='r', zorder=9, edgecolor='black', marker='+')
+    ax.scatter(bg_data, y_data, c='b', zorder=9, edgecolor='black', marker='+')
     
     probs = 1.0 / (1.0 + np.exp(-field_params[1]))
     #z_min = 0.0
@@ -156,12 +162,13 @@ def plot_field_1d(field_params, r_data, g_data, fignum, save_path, title):
     rl, = ax.plot(field_params[0], r_dens, 'r')
     gl, = ax.plot(field_params[0], g_dens, 'b')
     pl, = ax.plot(field_params[0], probs, 'g')
-    ax.legend((rl, gl, pl), ('Real', 'Gen', 'Sig'))
+    ax.legend((rl, gl, pl), ('Real', 'Gen', 'Sig'), loc=2)
     ax.grid(True, which='both', linestyle='dotted')
     ax.set_xlabel('Data Space')
     ax.set_ylabel('Prob Density')
     ax.set_title(title+'_sig_boundary')
     ax.set_ylim(-0.1, 1.1)
+    ax.set_xlim(-5.1, 5.1)
 
     ### bottom subplot: decision function DIS
     ax = fig.add_subplot(2, 1, 2)
@@ -199,8 +206,8 @@ if __name__ == '__main__':
     data_dim = 1
     fov = 5 ## field of view in field plot
 
-    centers = [[2,2]]
-    stds = [[0.2, 0.2]] * 1
+    centers = [[-0.5,2], [2,2]]
+    stds = [[0.05, 0.2], [0.05, 0.2]]
     labels = [0, 0]
     train_dataset, train_gt, test_dataset, test_gt = \
         generate_normal_data(train_size, test_size, centers, stds, labels)
@@ -217,11 +224,12 @@ if __name__ == '__main__':
     d_g_logs = list()
 
     ### baby gan training
-    epochs = 100
-    d_updates = 64
-    g_updates = 10
+    epochs = 50
+    d_updates = 1
+    g_updates = 1
     baby = baby_gan.BabyGAN(data_dim)
     batch_size = 32
+    field_sample_size = 200
     itr = 0
     itr_total = 0
     max_itr_total = np.ceil(train_size*1.0 / batch_size + train_size*1.0 / batch_size / d_updates * g_updates)
@@ -230,6 +238,8 @@ if __name__ == '__main__':
     pbar.start()
     for ep in range(epochs):
         np.random.shuffle(train_dataset)
+        #train_dataset, train_gt, test_dataset, test_gt = \
+        #    generate_normal_data(train_size, test_size, centers, stds, labels)
         print '>>> Epoch %d is started...' % ep
         ### discriminator update
         for batch_start in range(0, train_size, batch_size):
@@ -237,30 +247,43 @@ if __name__ == '__main__':
             batch_end = batch_start + batch_size
             batch_data = train_dataset[batch_start:batch_end, 0] if data_dim == 1 else train_dataset[batch_start:batch_end, :]
             batch_data = batch_data.reshape((batch_data.shape[0], data_dim))
-            logs, g_data = baby.step(batch_data, batch_size, gen_update=False, dis_only=False)
+            logs, batch_g_data = baby.step(batch_data, batch_size, gen_update=False)
+            if data_dim == 1:
+                g_data = baby.step(None, field_sample_size, gen_only=True)
+                d_data = train_dataset[0:field_sample_size, 0]
+                d_data = d_data.reshape((d_data.shape[0], data_dim))
+            else:
+                g_data = baby.step(None, field_sample_size, gen_only=True)
+                d_data = train_dataset[0:field_sample_size, :]
+                d_data = d_data.reshape((d_data.shape[0], data_dim))
             g_logs.append(logs[0])
             d_r_logs.append(logs[1])
             d_g_logs.append(logs[2])
             ### calculate and plot field of decision
             if data_dim == 1:
                 field_params = baby_gan_field_1d(baby, -fov, fov, batch_size*10)
-                plot_field_1d(field_params, batch_data, g_data, 0, log_path_png+'/field_%d.png' % itr_total, 'DIS_%d_%d' % (itr%d_updates, itr_total))    
+                plot_field_1d(field_params, (d_data, batch_data), (g_data, batch_g_data), 0,
+                    log_path_png+'/field_%d.png' % itr_total, 'DIS_%d_%d' % (itr%d_updates, itr_total))    
             else:
                 field_params = baby_gan_field_2d(baby, -fov, fov, -fov, fov, batch_size*10)
-                plot_field_2d(field_params, batch_data, g_data, 0, log_path_png+'/field_%d.png' % itr_total, 'DIS_%d_%d' % (itr%d_updates, itr_total))
+                plot_field_2d(field_params, (d_data, batch_data), (g_data, batch_g_data), 0,
+                    log_path_png+'/field_%d.png' % itr_total, 'DIS_%d_%d' % (itr%d_updates, itr_total))
             itr += 1
             itr_total += 1
             ### generator updates: g_updates times for each d_updates of discriminator
             if itr % d_updates == 0 and itr != 0:
                 for gn in range(g_updates):
-                    logs, g_data = baby.step(batch_data, batch_size, gen_update=True, dis_only=False)
+                    logs, batch_g_data = baby.step(batch_data, batch_size, gen_update=True)
+                    g_data = baby.step(None, field_sample_size, gen_only=True)
                     g_logs.append(logs[0])
                     d_r_logs.append(logs[1])
                     d_g_logs.append(logs[2])
                     if data_dim == 1:
-                        plot_field_1d(field_params, batch_data, g_data, 0, log_path_png+'/field_%d.png' % itr_total, 'GEN_%d_%d' % (gn, itr_total))
+                        plot_field_1d(field_params, (d_data, batch_data), (g_data, batch_g_data), 0,
+                            log_path_png+'/field_%d.png' % itr_total, 'GEN_%d_%d' % (gn, itr_total))
                     else:
-                        plot_field_2d(field_params, batch_data, g_data, 0, log_path_png+'/field_%d.png' % itr_total, 'GEN_%d_%d' % (gn, itr_total))
+                        plot_field_2d(field_params, (d_data, batch_data), (g_data, batch_g_data), 0,
+                            log_path_png+'/field_%d.png' % itr_total, 'GEN_%d_%d' % (gn, itr_total))
                     itr_total += 1
                 #_, dis_confs, trace = baby.gen_consolidate(count=50)
                 #print '>>> CONFS: ', dis_confs

@@ -31,9 +31,9 @@ class BabyGAN:
             self.g_config = OptConfig(rho=0.5, eps=1e-6, lr=0.0002, clip=10.0)
         else:
             self.d_state = adadelta.State()
-            self.d_config = OptConfig(rho=0.95, eps=1e-6, lr=1.0, clip=100.0)
+            self.d_config = OptConfig(rho=0.95, eps=1e-6, lr=1.0, clip=10.0)
             self.g_state = adadelta.State()
-            self.g_config = OptConfig(rho=0.95, eps=1e-6, lr=1.0, clip=100.0)
+            self.g_config = OptConfig(rho=0.95, eps=1e-6, lr=1.0, clip=10.0)
         
         self.d_var_name = 'd_var_name'
         self.d_name_real = 'd_name_real'
@@ -60,10 +60,15 @@ class BabyGAN:
     Retrun logit
     '''
     def d_forward(self, name, var_name, bottom, phase='train'):
+        scale_layer = 'scale_layer_%s' % name
         hlayer_1 = 'd_hlayer_1_%s' % name
         relu_1 = 'd_relu_1_%s' % name
         hlayer_2 = 'd_hlayer_2_%s' % name
         relu_2 = 'd_relu_2_%s' % name
+        hlayer_3 = 'd_hlayer_3_%s' % name
+        relu_3 = 'd_relu_3_%s' % name
+        hlayer_4 = 'd_hlayer_4_%s' % name
+        relu_4 = 'd_relu_4_%s' % name
         logit = 'd_logit_%s' % name
         bn_1 = 'bn_1_%s_%s' % (name,phase)
         bn_2 = 'bn_2_%s_%s' % (name,phase)
@@ -79,16 +84,30 @@ class BabyGAN:
         bn_m_2 = 'bn_m_2_%s' % var_name
         bn_v_2 = 'bn_v_2_%s' % var_name
         bn_c_2 = 'bn_c_2_%s' % var_name
+
+        hw_3 = 'd_hw_3_%s' % var_name
+        hb_3 = 'd_hb_3_%s' % var_name
+        bn_m_3 = 'bn_m_3_%s' % var_name
+        bn_v_3 = 'bn_v_3_%s' % var_name
+        bn_c_3 = 'bn_c_3_%s' % var_name
+
+        hw_4 = 'd_hw_4_%s' % var_name
+        hb_4 = 'd_hb_4_%s' % var_name
+        bn_m_4 = 'bn_m_4_%s' % var_name
+        bn_v_4 = 'bn_v_4_%s' % var_name
+        bn_c_4 = 'bn_c_4_%s' % var_name
         
         w = 'd_w_%s' % var_name
         b = 'd_b_%s' % var_name
         
-        h_size = 64
+        h_size = 128
         net = self.net
         global_stats = True if phase == 'test' else False
         avg_momentum = 0.0 if phase == 'eval' else 0.95
 
-        net.f(InnerProduct(hlayer_1, h_size, bottoms=[bottom], param_names=[hw_1, hb_1],
+        #net.f(Power(scale_layer, bottoms=[bottom], scale=0.25))
+        scale_layer = bottom
+        net.f(InnerProduct(hlayer_1, h_size, bottoms=[scale_layer], param_names=[hw_1, hb_1],
             weight_filler=Filler("xavier"), bias_filler=Filler("constant", 0.0)))
         #net.f(BatchNorm(bn_1, bottoms=[hlayer_1], param_names=[bn_m_1, bn_v_1, bn_c_1],
         #    use_global_stats = global_stats, moving_average_fraction=avg_momentum, param_lr_mults=[0.,0.,0.]))
@@ -100,6 +119,21 @@ class BabyGAN:
         #net.f(BatchNorm(bn_2, bottoms=[hlayer_2], param_names=['bn0', 'bn1', 'bn2'],
         #    use_global_stats = global_stats, moving_average_fraction=avg_momentum))
         net.f(ReLU(relu_2, bottoms=[hlayer_2], negative_slope=0.2))
+        #net.f(TanH(relu_2, bottoms=[hlayer_2]))
+
+        #net.f(InnerProduct(hlayer_3, h_size, bottoms=[relu_2], param_names=[hw_3, hb_3],
+        #    weight_filler=Filler("xavier"), bias_filler=Filler("constant", 0.0)))
+        #net.f(BatchNorm(bn_1, bottoms=[hlayer_1], param_names=[bn_m_1, bn_v_1, bn_c_1],
+        #    use_global_stats = global_stats, moving_average_fraction=avg_momentum, param_lr_mults=[0.,0.,0.]))
+        #net.f(ReLU(relu_2, bottoms=[hlayer_2]))
+        #net.f(TanH(relu_3, bottoms=[hlayer_3]))
+
+        #net.f(InnerProduct(hlayer_4, h_size, bottoms=[relu_3], param_names=[hw_4, hb_4],
+        #    weight_filler=Filler("xavier"), bias_filler=Filler("constant", 0.0)))
+        #net.f(BatchNorm(bn_1, bottoms=[hlayer_1], param_names=[bn_m_1, bn_v_1, bn_c_1],
+        #    use_global_stats = global_stats, moving_average_fraction=avg_momentum, param_lr_mults=[0.,0.,0.]))
+        #net.f(ReLU(relu_2, bottoms=[hlayer_2]))
+        #net.f(TanH(relu_4, bottoms=[hlayer_4]))
 
         net.f(InnerProduct(logit, 1, bottoms=[relu_2], param_names=[w, b],
             weight_filler=Filler("xavier")))
@@ -115,6 +149,10 @@ class BabyGAN:
         relu_1 = 'g_relu_1_%s' % name
         hlayer_2 = 'g_hlayer_2_%s' % name
         relu_2 = 'g_relu_2_%s' % name
+        hlayer_3 = 'g_hlayer_3_%s' % name
+        relu_3 = 'g_relu_3_%s' % name
+        hlayer_4 = 'g_hlayer_4_%s' % name
+        relu_4 = 'g_relu_4_%s' % name
         data = 'g_data_%s' % name
         bn_1 = 'bn_1_%s_%s' % (name,phase)
         bn_2 = 'bn_2_%s_%s' % (name,phase)
@@ -131,10 +169,22 @@ class BabyGAN:
         bn_v_2 = 'bn_v_2_%s' % var_name
         bn_c_2 = 'bn_c_2_%s' % var_name
 
+        hw_3 = 'g_hw_3_%s' % var_name
+        hb_3 = 'g_hb_3_%s' % var_name
+        bn_m_3 = 'bn_m_3_%s' % var_name
+        bn_v_3 = 'bn_v_3_%s' % var_name
+        bn_c_3 = 'bn_c_3_%s' % var_name
+
+        hw_4 = 'g_hw_4_%s' % var_name
+        hb_4 = 'g_hb_4_%s' % var_name
+        bn_m_4 = 'bn_m_4_%s' % var_name
+        bn_v_4 = 'bn_v_4_%s' % var_name
+        bn_c_4 = 'bn_c_4_%s' % var_name
+
         w = 'g_w_%s' % var_name
         b = 'g_b_%s' % var_name
         
-        h_size = 64
+        h_size = 128
         net = self.net
 
         global_stats = True if phase == 'test' else False
@@ -151,6 +201,21 @@ class BabyGAN:
         #net.f(BatchNorm(bn_1, bottoms=[hlayer_1], param_names=[bn_m_1, bn_v_1, bn_c_1],
         #    use_global_stats = global_stats, moving_average_fraction=avg_momentum, param_lr_mults=[0.,0.,0.]))
         net.f(ReLU(relu_2, bottoms=[hlayer_2]))
+        #net.f(TanH(relu_2, bottoms=[hlayer_2]))
+
+        #net.f(InnerProduct(hlayer_3, h_size, bottoms=[relu_2], param_names=[hw_3, hb_3],
+        #    weight_filler=Filler("xavier"), bias_filler=Filler("constant", 0.0)))
+        #net.f(BatchNorm(bn_1, bottoms=[hlayer_1], param_names=[bn_m_1, bn_v_1, bn_c_1],
+        #    use_global_stats = global_stats, moving_average_fraction=avg_momentum, param_lr_mults=[0.,0.,0.]))
+        #net.f(ReLU(relu_2, bottoms=[hlayer_2]))
+        #net.f(TanH(relu_3, bottoms=[hlayer_3]))
+
+        #net.f(InnerProduct(hlayer_4, h_size, bottoms=[relu_3], param_names=[hw_4, hb_4],
+        #    weight_filler=Filler("xavier"), bias_filler=Filler("constant", 0.0)))
+        #net.f(BatchNorm(bn_1, bottoms=[hlayer_1], param_names=[bn_m_1, bn_v_1, bn_c_1],
+        #    use_global_stats = global_stats, moving_average_fraction=avg_momentum, param_lr_mults=[0.,0.,0.]))
+        #net.f(ReLU(relu_2, bottoms=[hlayer_2]))
+        #net.f(TanH(relu_4, bottoms=[hlayer_4]))
         
         net.f(InnerProduct(data, self.data_dim , bottoms=[relu_2], param_names=[w, b],
             weight_filler=Filler("xavier"), bias_filler=Filler("constant", 0.0)))
@@ -311,7 +376,7 @@ class BabyGAN:
     If gen_update is True: train and eval gen for one step
     If dis_only is True: only get the logits for the disc given the batch_data 
     '''   
-    def step(self, batch_data, batch_size, gen_update=False, dis_only=False):
+    def step(self, batch_data, batch_size, gen_update=False, dis_only=False, gen_only=False):
         self.clean_network()
         net = self.net
         r_layer = 'r_layer'
@@ -326,8 +391,11 @@ class BabyGAN:
                 return net.blobs[u_logit].data.flatten()
         
         ### sample z from uniform (-1,1)
-        z_data = np.random.uniform(low=-2.0, high=2.0, size=(batch_size, self.z_dim))
+        z_data = np.random.uniform(low=-4.0, high=4.0, size=(batch_size, self.z_dim))
         net.f(NumpyData(z_layer, z_data))
+        if gen_only:
+            g_layer = self.g_forward(self.g_name, self.g_var_name, z_layer, phase='eval')
+            return net.blobs[g_layer].data
 
         ### run one training step on discriminator if batch_data is not None, otherwise on generator
         if not gen_update:
