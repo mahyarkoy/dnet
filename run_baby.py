@@ -206,8 +206,8 @@ if __name__ == '__main__':
     data_dim = 1
     fov = 5 ## field of view in field plot
 
-    centers = [[-0.5,2], [2,2]]
-    stds = [[0.05, 0.2], [0.05, 0.2]]
+    centers = [[-2.0, 2.0], [2.0, 2.0]]
+    stds = [[0.2, 0.2], [0.2, 0.2]]
     labels = [0, 0]
     train_dataset, train_gt, test_dataset, test_gt = \
         generate_normal_data(train_size, test_size, centers, stds, labels)
@@ -225,11 +225,11 @@ if __name__ == '__main__':
 
     ### baby gan training
     epochs = 50
-    d_updates = 1
+    d_updates = 64
     g_updates = 1
     baby = baby_gan.BabyGAN(data_dim)
     batch_size = 32
-    field_sample_size = 200
+    field_sample_size = 100
     itr = 0
     itr_total = 0
     max_itr_total = np.ceil(train_size*1.0 / batch_size + train_size*1.0 / batch_size / d_updates * g_updates)

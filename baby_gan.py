@@ -108,14 +108,14 @@ class BabyGAN:
         #net.f(Power(scale_layer, bottoms=[bottom], scale=0.25))
         scale_layer = bottom
         net.f(InnerProduct(hlayer_1, h_size, bottoms=[scale_layer], param_names=[hw_1, hb_1],
-            weight_filler=Filler("xavier"), bias_filler=Filler("constant", 0.0)))
+            weight_filler=Filler("gaussian", 0.2), bias_filler=Filler("constant", 0.0)))
         #net.f(BatchNorm(bn_1, bottoms=[hlayer_1], param_names=[bn_m_1, bn_v_1, bn_c_1],
         #    use_global_stats = global_stats, moving_average_fraction=avg_momentum, param_lr_mults=[0.,0.,0.]))
         net.f(ReLU(relu_1, bottoms=[hlayer_1], negative_slope=0.2))
         #net.f(TanH(relu_1, bottoms=[hlayer_1]))
 
         net.f(InnerProduct(hlayer_2, h_size, bottoms=[relu_1], param_names=[hw_2, hb_2],
-            weight_filler=Filler("xavier"), bias_filler=Filler("constant", 0.0)))
+            weight_filler=Filler("gaussian", 0.2), bias_filler=Filler("constant", 0.0)))
         #net.f(BatchNorm(bn_2, bottoms=[hlayer_2], param_names=['bn0', 'bn1', 'bn2'],
         #    use_global_stats = global_stats, moving_average_fraction=avg_momentum))
         net.f(ReLU(relu_2, bottoms=[hlayer_2], negative_slope=0.2))
@@ -136,7 +136,7 @@ class BabyGAN:
         #net.f(TanH(relu_4, bottoms=[hlayer_4]))
 
         net.f(InnerProduct(logit, 1, bottoms=[relu_2], param_names=[w, b],
-            weight_filler=Filler("xavier")))
+            weight_filler=Filler("gaussian", 0.2)))
         return logit
     
     '''
@@ -190,14 +190,14 @@ class BabyGAN:
         global_stats = True if phase == 'test' else False
         avg_momentum = 0.0 if phase == 'eval' else 0.95
         net.f(InnerProduct(hlayer_1, h_size, bottoms=[bottom], param_names=[hw_1, hb_1],
-            weight_filler=Filler("xavier"), bias_filler=Filler("constant", 0.0)))
+            weight_filler=Filler("gaussian", 0.2), bias_filler=Filler("constant", 0.0)))
         #net.f(BatchNorm(bn_1, bottoms=[hlayer_1], param_names=[bn_m_1, bn_v_1, bn_c_1],
         #    use_global_stats = global_stats, moving_average_fraction=avg_momentum, param_lr_mults=[0.,0.,0.]))
         net.f(ReLU(relu_1, bottoms=[hlayer_1]))
         #net.f(TanH(relu_1, bottoms=[hlayer_1]))
         
         net.f(InnerProduct(hlayer_2, h_size, bottoms=[relu_1], param_names=[hw_2, hb_2],
-            weight_filler=Filler("xavier"), bias_filler=Filler("constant", 0.0)))
+            weight_filler=Filler("gaussian", 0.2), bias_filler=Filler("constant", 0.0)))
         #net.f(BatchNorm(bn_1, bottoms=[hlayer_1], param_names=[bn_m_1, bn_v_1, bn_c_1],
         #    use_global_stats = global_stats, moving_average_fraction=avg_momentum, param_lr_mults=[0.,0.,0.]))
         net.f(ReLU(relu_2, bottoms=[hlayer_2]))
@@ -218,7 +218,7 @@ class BabyGAN:
         #net.f(TanH(relu_4, bottoms=[hlayer_4]))
         
         net.f(InnerProduct(data, self.data_dim , bottoms=[relu_2], param_names=[w, b],
-            weight_filler=Filler("xavier"), bias_filler=Filler("constant", 0.0)))
+            weight_filler=Filler("gaussian", 0.2), bias_filler=Filler("constant", 0.0)))
         return data
     
     '''

@@ -31,9 +31,18 @@
 31_1d: centers(-2, 2), adadelta(clip:100), g(hidden1:128/relu/hidden2:128/relu), d(hidden1:128/lrelu:0.2/hidden2:128/lrelu:0.2), z_dim=8, epoch=20, g_update=1, d_updates=1, g/r_loss_weight=1, z=4.0
 32_1d: centers(-2, 2), adadelta(clip:10), g(hidden1:128/relu/hidden2:128/relu), d(hidden1:128/lrelu:0.2/hidden2:128/lrelu:0.2), z_dim=8, epoch=20, g_update=1, d_updates=64, g/r_loss_weight=1, z=4.0
 33_1d: centers(-4, 2), adam, g(hidden1:128/relu/hidden2:128/relu), d(hidden1:128/lrelu:0.2/hidden2:128/lrelu:0.2), z_dim=8, epoch=20, g_update=1, d_updates=1, g/r_loss_weight=1, z=4.0
-34_1d: centers(-2:0.2, 2:0.2), adam, g(hidden1:128/relu/hidden2:128/relu), d(hidden1:128/lrelu:0.2/hidden2:128/lrelu:0.2), z_dim=8, epoch=20, g_update=1, d_updates=64, g/r_loss_weight=1, z=4.0
+34_1d: centers(-2:0.2, 2:0.2), adam, g(hidden1:128/relu/hidden2:128/relu), d(hidden1:128/lrelu:0.2/hidden2:128/lrelu:0.2), z_dim=8, epoch=20, g_update=1, d_updates=64, g/r_loss_weight=1, z=4.0, batch=32
 35_1d: centers(-2:0.05, 2:0.2), adam, g(hidden1:128/relu/hidden2:128/relu), d(hidden1:128/lrelu:0.2/hidden2:128/lrelu:0.2), z_dim=8, epoch=20, g_update=1, d_updates=1, g/r_loss_weight=1, z=4.0
 36_1d: centers(-0.5:0.1, 1:0.1), adam, g(hidden1:128/relu/hidden2:128/relu), d(hidden1:128/lrelu:0.2/hidden2:128/lrelu:0.2), z_dim=8, epoch=50, g_update=1, d_updates=1, g/r_loss_weight=1, z=4.0
 37_1d: centers(-2:0.2, 2:0.2), adam, g(hidden1:128/relu/hidden2:128/relu), d(hidden1:128/lrelu:0.2/hidden2:128/lrelu:0.2), z_dim=8, epoch=50, g_update=10, d_updates=1, g/r_loss_weight=1, z=4.0
 38_1d: centers(-0.5:0.05, 2:0.05), adam, g(hidden1:128/relu/hidden2:128/relu), d(hidden1:128/lrelu:0.2/hidden2:128/lrelu:0.2), z_dim=8, epoch=20, g_update=1, d_updates=1, g/r_loss_weight=1, z=4.0
-
+39W_1d: centers(-2:0.05), adam(lr:e-3, wclip:e-1), g(hidden1:128/relu/hidden2:128/relu), d(hidden1:128/lrelu:0.2/hidden2:128/lrelu:0.2), z_dim=8, epoch=50, g_update=1, d_updates=1, g/r_loss_weight=1, z=4.0
+40W_1d: centers(-2:0.05), adam(lr:e-3, wclip:e-2), g(hidden1:128/relu/hidden2:128/relu), d(hidden1:128/lrelu:0.2/hidden2:128/lrelu:0.2), z_dim=8, epoch=50, g_update=1, d_updates=1, g/r_loss_weight=1, z=4.0
+41_1d: centers(-2:0.2, 2:0.2), adam, g(hidden1:128/relu/hidden2:128/relu), d(hidden1:128/lrelu:0.2/hidden2:128/lrelu:0.2), z_dim=8, epoch=200, g_update=1, d_updates=64, g/r_loss_weight=1, z=4.0, batch=256
+42W_1d: centers(-2:0.2, 2:0.2), adam(lr:e-3, wclip:e-2), g(hidden1:128/relu/hidden2:128/relu), d(hidden1:128/lrelu:0.2/hidden2:128/lrelu:0.2), z_dim=8, epoch=100, g_update=1, d_updates=1, g/r_loss_weight=1, z=4.0, batch:32
+43_1d: centers(-2, 2), adam, g(hidden1:128/relu/hidden2:128/relu), d(hidden1:128/lrelu:0.2/hidden2:128/lrelu:0.2), z_dim=8, epoch=50, g_update=1, d_updates=1, g/r_loss_weight=1, z=4.0, sampling_dataset, batch=256
+44_1d: centers(-2, 2), adam, g(hidden1:128/relu/hidden2:128/relu), d(hidden1:128/lrelu:0.2/hidden2:128/lrelu:0.2), z_dim=8, epoch=400, g_update=1, d_updates=64, g/r_loss_weight=1, z=8.0, batch=256
+45_1d: centers(-2, 2), adam, g(hidden1:128/relu/hidden2:128/relu), d(hidden1:128/lrelu:0.2/hidden2:128/lrelu:0.2), z_dim=8, epoch=50, g_update=1, d_updates=64, g/r_loss_weight=1, z=1.0, batch=32
+46_1d: centers(-2, 2), adam, g(hidden1:128/relu/hidden2:128/relu), d(hidden1:128/lrelu:0.2/hidden2:128/lrelu:0.2), z_dim=8, epoch=50, g_update=1, d_updates=1, g/r_loss_weight=1, z=1.0, batch=32
+47_1d: centers(-2, 2), adam, g(hidden1:128/relu/hidden2:128/relu), d(hidden1:128/lrelu:0.2/hidden2:128/lrelu:0.2), z_dim=8, epoch=50, g_update=1, d_updates=1, g/r_loss_weight=1, z=8.0, batch=32
+48_1d: centers(-2:0.2, 2:0.2), adam, g(hidden1:128/relu/hidden2:128/relu), d(hidden1:128/lrelu:0.2/hidden2:128/lrelu:0.2), z_dim=8, epoch=600, g_update=1, d_updates=64, g/r_loss_weight=1, z=4.0, batch=256
