@@ -46,3 +46,9 @@
 46_1d: centers(-2, 2), adam, g(hidden1:128/relu/hidden2:128/relu), d(hidden1:128/lrelu:0.2/hidden2:128/lrelu:0.2), z_dim=8, epoch=50, g_update=1, d_updates=1, g/r_loss_weight=1, z=1.0, batch=32
 47_1d: centers(-2, 2), adam, g(hidden1:128/relu/hidden2:128/relu), d(hidden1:128/lrelu:0.2/hidden2:128/lrelu:0.2), z_dim=8, epoch=50, g_update=1, d_updates=1, g/r_loss_weight=1, z=8.0, batch=32
 48_1d: centers(-2:0.2, 2:0.2), adam, g(hidden1:128/relu/hidden2:128/relu), d(hidden1:128/lrelu:0.2/hidden2:128/lrelu:0.2), z_dim=8, epoch=600, g_update=1, d_updates=64, g/r_loss_weight=1, z=4.0, batch=256
+49_1d: centers(-2:0.2, 2:0.2), adam, g(hidden1:128/relu/hidden2:128/relu), d(hidden1:128/lrelu:0.2/hidden2:128/lrelu:0.2), z_dim=8, epoch=50, g_update=1, d_updates=64, g/r_loss_weight=1, z=4.0, batch=32, gauss init
+50_1d: centers(-2:0.2, 2:0.2), adam, g(hidden1:128/relu/hidden2:128/relu), d(hidden1:128/lrelu:0.2/hidden2:128/lrelu:0.2), z_dim=8, epoch=50, g_update=1, d_updates=8, g/r_loss_weight=1, z=4.0, batch=32, vanishing loss!
+51_1d: centers(-2:0.2, 2:0.2), adam, g(hidden1:128/relu/hidden2:128/relu), d(hidden1:128/lrelu:0.2/hidden2:128/lrelu:0.2), z_dim=8, epoch=100, g_update=1, d_updates=1, g/r_loss_weight=1, z=4.0, batch=32, gauss init
+52_1d: centers(-2:0.2, 2:0.2), adam, g(hidden1:128/relu/hidden2:128/relu), d(hidden1:128/lrelu:0.2/hidden2:128/lrelu:0.2), z_dim=8, epoch=100, g_update=1, d_updates=64, g/r_loss_weight=1, z=4.0, batch=32, vanishing loss!
+53_1d: centers(-2:0.2, 2:0.2), adadelta(clip:10, lr:2e-4), g(hidden1:128/relu/hidden2:128/relu), d(hidden1:128/lrelu:0.2/hidden2:128/lrelu:0.2), z_dim=8, epoch=100, g_update=1, d_updates=128, g/r_loss_weight=1, z=4.0, batch=32, reset d
+

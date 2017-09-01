@@ -22,7 +22,7 @@ OptConfig = namedtuple('OptConfig', 'rho eps lr clip')
 class BabyGAN:
     def __init__(self, data_dim=2):
         self.net = apollocaffe.ApolloNet()
-        self.update_type = 'adam'
+        self.update_type = 'adadelta'
         self.loss_type = 'log'
         if self.update_type == 'adam':
             self.d_state = adam.State()
@@ -53,6 +53,8 @@ class BabyGAN:
         self.max_memory = 5
         self.gen_confs = np.zeros(self.max_memory)
         self.gen_trace = np.zeros(self.max_memory)
+
+        self.par_inits = dict()
 
     '''
     Forward the discriminator with the given name
@@ -108,14 +110,14 @@ class BabyGAN:
         #net.f(Power(scale_layer, bottoms=[bottom], scale=0.25))
         scale_layer = bottom
         net.f(InnerProduct(hlayer_1, h_size, bottoms=[scale_layer], param_names=[hw_1, hb_1],
-            weight_filler=Filler("gaussian", 0.2), bias_filler=Filler("constant", 0.0)))
+            weight_filler=Filler("xavier"), bias_filler=Filler("constant", 0.0)))
         #net.f(BatchNorm(bn_1, bottoms=[hlayer_1], param_names=[bn_m_1, bn_v_1, bn_c_1],
         #    use_global_stats = global_stats, moving_average_fraction=avg_momentum, param_lr_mults=[0.,0.,0.]))
         net.f(ReLU(relu_1, bottoms=[hlayer_1], negative_slope=0.2))
         #net.f(TanH(relu_1, bottoms=[hlayer_1]))
 
         net.f(InnerProduct(hlayer_2, h_size, bottoms=[relu_1], param_names=[hw_2, hb_2],
-            weight_filler=Filler("gaussian", 0.2), bias_filler=Filler("constant", 0.0)))
+            weight_filler=Filler("xavier"), bias_filler=Filler("constant", 0.0)))
         #net.f(BatchNorm(bn_2, bottoms=[hlayer_2], param_names=['bn0', 'bn1', 'bn2'],
         #    use_global_stats = global_stats, moving_average_fraction=avg_momentum))
         net.f(ReLU(relu_2, bottoms=[hlayer_2], negative_slope=0.2))
@@ -136,7 +138,7 @@ class BabyGAN:
         #net.f(TanH(relu_4, bottoms=[hlayer_4]))
 
         net.f(InnerProduct(logit, 1, bottoms=[relu_2], param_names=[w, b],
-            weight_filler=Filler("gaussian", 0.2)))
+            weight_filler=Filler("xavier")))
         return logit
     
     '''
@@ -190,14 +192,14 @@ class BabyGAN:
         global_stats = True if phase == 'test' else False
         avg_momentum = 0.0 if phase == 'eval' else 0.95
         net.f(InnerProduct(hlayer_1, h_size, bottoms=[bottom], param_names=[hw_1, hb_1],
-            weight_filler=Filler("gaussian", 0.2), bias_filler=Filler("constant", 0.0)))
+            weight_filler=Filler("xavier"), bias_filler=Filler("constant", 0.0)))
         #net.f(BatchNorm(bn_1, bottoms=[hlayer_1], param_names=[bn_m_1, bn_v_1, bn_c_1],
         #    use_global_stats = global_stats, moving_average_fraction=avg_momentum, param_lr_mults=[0.,0.,0.]))
         net.f(ReLU(relu_1, bottoms=[hlayer_1]))
         #net.f(TanH(relu_1, bottoms=[hlayer_1]))
         
         net.f(InnerProduct(hlayer_2, h_size, bottoms=[relu_1], param_names=[hw_2, hb_2],
-            weight_filler=Filler("gaussian", 0.2), bias_filler=Filler("constant", 0.0)))
+            weight_filler=Filler("xavier"), bias_filler=Filler("constant", 0.0)))
         #net.f(BatchNorm(bn_1, bottoms=[hlayer_1], param_names=[bn_m_1, bn_v_1, bn_c_1],
         #    use_global_stats = global_stats, moving_average_fraction=avg_momentum, param_lr_mults=[0.,0.,0.]))
         net.f(ReLU(relu_2, bottoms=[hlayer_2]))
@@ -218,7 +220,7 @@ class BabyGAN:
         #net.f(TanH(relu_4, bottoms=[hlayer_4]))
         
         net.f(InnerProduct(data, self.data_dim , bottoms=[relu_2], param_names=[w, b],
-            weight_filler=Filler("gaussian", 0.2), bias_filler=Filler("constant", 0.0)))
+            weight_filler=Filler("xavier"), bias_filler=Filler("constant", 0.0)))
         return data
     
     '''
@@ -299,6 +301,7 @@ class BabyGAN:
         
         if phase == 'train':
             self.clean_network()
+
             ### forward generator and get the generated layer in data: batch_size*data_dim
             g_layer = self.g_forward(self.g_name, self.g_var_name, z_layer, phase='train')
             ### forward discriminator and get real/gen logits: batch_size*1
@@ -312,8 +315,12 @@ class BabyGAN:
             d_r_loss = net.blobs[d_r_loss].data.item()
             d_g_loss = net.blobs[d_g_loss].data.item()
 
+            ### save initialized values of all parameters in the network
+            if len(self.par_inits) == 0:
+                self.save_init_network()
+
             net.backward()
-        
+
         ### update parameters with adam (no clipping)
         if update:
             if self.update_type == 'adam':
@@ -478,6 +485,21 @@ class BabyGAN:
         for par in net.active_param_names():
             net.params[par].diff[...] = 0.0
         net.clear_forward()
+
+    def reset_network(self, key):
+        net = self.net
+        for par in net.params.keys():
+            if par.startswith(key):
+                net.params[par].data[...] = self.par_inits[par]
+                if key == 'd_':
+                    del self.d_state.sq_grads[par]
+                else:
+                    del self.g_state.sq_grads[par]
+
+    def save_init_network(self):
+        net = self.net
+        for par in net.params.keys():
+            self.par_inits[par] = np.array(net.params[par].data)
 
 
 

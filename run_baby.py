@@ -224,8 +224,8 @@ if __name__ == '__main__':
     d_g_logs = list()
 
     ### baby gan training
-    epochs = 50
-    d_updates = 64
+    epochs = 200
+    d_updates = 128
     g_updates = 1
     baby = baby_gan.BabyGAN(data_dim)
     batch_size = 32
@@ -288,6 +288,7 @@ if __name__ == '__main__':
                 #_, dis_confs, trace = baby.gen_consolidate(count=50)
                 #print '>>> CONFS: ', dis_confs
                 #print '>>> TRACE: ', trace
+                baby.reset_network('d_')
 
     ### plot baby gan progress logs
     g_logs_mat = np.array(g_logs)
