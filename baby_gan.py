@@ -122,7 +122,7 @@ class BabyGAN:
             weight_filler=Filler("xavier"), bias_filler=Filler("constant", 0.0)))
         #net.f(BatchNorm(bn_1, bottoms=[hlayer_1], param_names=[bn_m_1, bn_v_1, bn_c_1],
         #    use_global_stats = global_stats, moving_average_fraction=avg_momentum, param_lr_mults=[0.,0.,0.]))
-        if self.d_activaton = 'relu':
+        if self.d_activaton == 'relu':
             net.f(ReLU(relu_1, bottoms=[hlayer_1], negative_slope=0.2))
         else:
             net.f(TanH(relu_1, bottoms=[hlayer_1]))
@@ -131,7 +131,7 @@ class BabyGAN:
             weight_filler=Filler("xavier"), bias_filler=Filler("constant", 0.0)))
         #net.f(BatchNorm(bn_2, bottoms=[hlayer_2], param_names=['bn0', 'bn1', 'bn2'],
         #    use_global_stats = global_stats, moving_average_fraction=avg_momentum))
-        if self.d_activaton = 'relu':
+        if self.d_activaton == 'relu':
             net.f(ReLU(relu_2, bottoms=[hlayer_2], negative_slope=0.2))
         else:
             net.f(TanH(relu_2, bottoms=[hlayer_2]))
@@ -209,7 +209,7 @@ class BabyGAN:
             weight_filler=Filler("xavier"), bias_filler=Filler("constant", 0.0)))
         #net.f(BatchNorm(bn_1, bottoms=[hlayer_1], param_names=[bn_m_1, bn_v_1, bn_c_1],
         #    use_global_stats = global_stats, moving_average_fraction=avg_momentum, param_lr_mults=[0.,0.,0.]))
-        if self.g_activaton = 'relu':
+        if self.g_activaton == 'relu':
             net.f(ReLU(relu_1, bottoms=[hlayer_1]))
         else:
             net.f(TanH(relu_1, bottoms=[hlayer_1]))
@@ -218,7 +218,7 @@ class BabyGAN:
             weight_filler=Filler("xavier"), bias_filler=Filler("constant", 0.0)))
         #net.f(BatchNorm(bn_1, bottoms=[hlayer_1], param_names=[bn_m_1, bn_v_1, bn_c_1],
         #    use_global_stats = global_stats, moving_average_fraction=avg_momentum, param_lr_mults=[0.,0.,0.]))
-        if self.g_activaton = 'relu':
+        if self.g_activaton == 'relu':
             net.f(ReLU(relu_2, bottoms=[hlayer_2]))
         else:
             net.f(TanH(relu_2, bottoms=[hlayer_2]))
