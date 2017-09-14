@@ -7,6 +7,9 @@ Created on Tue Aug  8 11:10:34 2017
 """
 ### To convert to mp4 in command line
 # ffmpeg -framerate 25 -i fields/field_%d.png -c:v libx264 -pix_fmt yuv420p baby_log_15.mp4
+### To speed up mp4
+# ffmpeg -i baby_log_57.mp4 -r 100 -filter:v "setpts=0.1*PTS" baby_log_57_100.mp4
+# for i in {0..7}; do mv baby_log_a"$((i))" baby_log_"$((i+74))"; done
 
 import numpy as np
 import baby_gan
@@ -108,8 +111,8 @@ def plot_field_2d(field_params, (r_data, br_data), (g_data, bg_data), fignum, sa
     fig.clf()
     ### top subplot: decision boundary
     ax = fig.add_subplot(2, 1, 1)
-    ax.scatter(r_data[:, 0], r_data[:, 1], c='r', zorder=9, cmap=plt.cm.Paired, edgecolor='black')
-    ax.scatter(g_data[:, 0], g_data[:, 1], c='b', zorder=9, cmap=plt.cm.Paired, edgecolor='black')
+    ax.scatter(br_data[:, 0], br_data[:, 1], c='r', zorder=9, cmap=plt.cm.Paired, edgecolor='black')
+    ax.scatter(bg_data[:, 0], bg_data[:, 1], c='b', zorder=9, cmap=plt.cm.Paired, edgecolor='black')
     
     probs = 1.0 / (1.0 + np.exp(-field_params[2]))
     #z_min = 0.0
@@ -201,14 +204,14 @@ def plot_time_mat(mat, mat_names, fignum, save_path):
 
 if __name__ == '__main__':
     ### dataset definition
-    train_size = 6400
+    train_size = 51200
     test_size = 100
-    data_dim = 1
-    fov = 5 ## field of view in field plot
+    data_dim = 2
+    fov = 4 ## field of view in field plot
 
-    centers = [[-2.0, 2.0], [2.0, 2.0]]
-    stds = [[0.2, 0.2], [0.2, 0.2]]
-    labels = [0, 0]
+    centers = [[-1.0, 0.0], [1.0, 0.0], [0.0, 1.0], [0.0, -1.0]]
+    stds = [[0.02, 0.02], [0.02, 0.02], [0.02, 0.02], [0.02, 0.02]]
+    labels = [0, 0, 0, 0]
     train_dataset, train_gt, test_dataset, test_gt = \
         generate_normal_data(train_size, test_size, centers, stds, labels)
     plot_dataset(train_dataset, train_gt, 'XOR Dataset')
@@ -224,26 +227,29 @@ if __name__ == '__main__':
     d_g_logs = list()
 
     ### baby gan training
-    epochs = 200
-    d_updates = 128
+    epochs = 100
+    d_updates = 10
     g_updates = 1
     baby = baby_gan.BabyGAN(data_dim)
-    batch_size = 32
+    batch_size = 512
     field_sample_size = 100
     itr = 0
     itr_total = 0
+    g_itr = 0
+    d_itr = 0
+    g_max_itr = 1e4
     max_itr_total = np.ceil(train_size*1.0 / batch_size + train_size*1.0 / batch_size / d_updates * g_updates)
     widgets = ["baby_gan", Percentage(), Bar(), ETA()]
-    pbar = ProgressBar(maxval=max_itr_total*epochs, widgets=widgets)
+    pbar = ProgressBar(maxval=g_max_itr, widgets=widgets)
     pbar.start()
-    for ep in range(epochs):
-        np.random.shuffle(train_dataset)
-        #train_dataset, train_gt, test_dataset, test_gt = \
-        #    generate_normal_data(train_size, test_size, centers, stds, labels)
-        print '>>> Epoch %d is started...' % ep
+    while g_itr < g_max_itr:
+        #np.random.shuffle(train_dataset)
+        train_dataset, train_gt, test_dataset, test_gt = \
+            generate_normal_data(train_size, test_size, centers, stds, labels)
+        #print '>>> Epoch %d is started...' % ep
         ### discriminator update
         for batch_start in range(0, train_size, batch_size):
-            pbar.update(itr_total)
+            pbar.update(g_itr)
             batch_end = batch_start + batch_size
             batch_data = train_dataset[batch_start:batch_end, 0] if data_dim == 1 else train_dataset[batch_start:batch_end, :]
             batch_data = batch_data.reshape((batch_data.shape[0], data_dim))
@@ -263,15 +269,15 @@ if __name__ == '__main__':
             if data_dim == 1:
                 field_params = baby_gan_field_1d(baby, -fov, fov, batch_size*10)
                 plot_field_1d(field_params, (d_data, batch_data), (g_data, batch_g_data), 0,
-                    log_path_png+'/field_%d.png' % itr_total, 'DIS_%d_%d' % (itr%d_updates, itr_total))    
+                    log_path_png+'/field_%d.png' % itr_total, 'DIS_%d_%d_%d' % (d_itr%d_updates, g_itr, itr_total))    
             else:
                 field_params = baby_gan_field_2d(baby, -fov, fov, -fov, fov, batch_size*10)
                 plot_field_2d(field_params, (d_data, batch_data), (g_data, batch_g_data), 0,
-                    log_path_png+'/field_%d.png' % itr_total, 'DIS_%d_%d' % (itr%d_updates, itr_total))
-            itr += 1
+                    log_path_png+'/field_%d.png' % itr_total, 'DIS_%d_%d_%d' % (d_itr%d_updates, g_itr, itr_total))
+            d_itr += 1
             itr_total += 1
             ### generator updates: g_updates times for each d_updates of discriminator
-            if itr % d_updates == 0 and itr != 0:
+            if d_itr % d_updates == 0 and d_itr != 0:
                 for gn in range(g_updates):
                     logs, batch_g_data = baby.step(batch_data, batch_size, gen_update=True)
                     g_data = baby.step(None, field_sample_size, gen_only=True)
@@ -280,15 +286,16 @@ if __name__ == '__main__':
                     d_g_logs.append(logs[2])
                     if data_dim == 1:
                         plot_field_1d(field_params, (d_data, batch_data), (g_data, batch_g_data), 0,
-                            log_path_png+'/field_%d.png' % itr_total, 'GEN_%d_%d' % (gn, itr_total))
+                            log_path_png+'/field_%d.png' % itr_total, 'GEN_%d_%d_%d' % (gn, g_itr, itr_total))
                     else:
                         plot_field_2d(field_params, (d_data, batch_data), (g_data, batch_g_data), 0,
-                            log_path_png+'/field_%d.png' % itr_total, 'GEN_%d_%d' % (gn, itr_total))
+                            log_path_png+'/field_%d.png' % itr_total, 'GEN_%d_%d_%d' % (gn, g_itr, itr_total))
+                    g_itr += 1
                     itr_total += 1
                 #_, dis_confs, trace = baby.gen_consolidate(count=50)
                 #print '>>> CONFS: ', dis_confs
                 #print '>>> TRACE: ', trace
-                baby.reset_network('d_')
+                #baby.reset_network('d_')
 
     ### plot baby gan progress logs
     g_logs_mat = np.array(g_logs)

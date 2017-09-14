@@ -11,7 +11,7 @@ from collections import defaultdict, namedtuple
 import apollocaffe
 from apollocaffe.layers import *
 import adam, adadelta
-from pylayers import PyBackMultLayer, PyWeightedMeanLoss
+from pylayers import PyBackMultLayer, PyWeightedMeanLoss, PyHellingerLoss
 import os
 
 apollocaffe.set_random_seed(0)
@@ -21,20 +21,24 @@ OptConfig = namedtuple('OptConfig', 'rho eps lr clip')
 
 class BabyGAN:
     def __init__(self, data_dim=2):
+        ### network initializations
         self.net = apollocaffe.ApolloNet()
-        self.update_type = 'adadelta'
-        self.loss_type = 'log'
+        self.par_inits = dict()
+
+        ### optimizer parameters
+        self.update_type = 'adam'
         if self.update_type == 'adam':
             self.d_state = adam.State()
-            self.d_config = OptConfig(rho=0.5, eps=1e-6, lr=0.0002, clip=10.0)
+            self.d_config = OptConfig(rho=0.5, eps=1e-8, lr=0.0001, clip=10.0)
             self.g_state = adam.State()
-            self.g_config = OptConfig(rho=0.5, eps=1e-6, lr=0.0002, clip=10.0)
+            self.g_config = OptConfig(rho=0.5, eps=1e-8, lr=0.0001, clip=10.0)
         else:
             self.d_state = adadelta.State()
             self.d_config = OptConfig(rho=0.95, eps=1e-6, lr=1.0, clip=10.0)
             self.g_state = adadelta.State()
             self.g_config = OptConfig(rho=0.95, eps=1e-6, lr=1.0, clip=10.0)
         
+        ### network names
         self.d_var_name = 'd_var_name'
         self.d_name_real = 'd_name_real'
         self.d_name_gen = 'd_name_gen'
@@ -45,16 +49,21 @@ class BabyGAN:
         self.g_name = 'g_name'
         self.g_loss_name = 'g_loss_name'
 
-        self.z_dim = 8
+        ### network parameters
+        self.z_dim = 256
+        self.z_range = 1.0
         self.data_dim = data_dim
+        self.loss_type = 'log'
+        self.g_loss_type = 'log'
+        self.d_activaton = 'tanh'
+        self.g_activaton = 'tanh'
 
+        ### Fisher parametes
         self.fisher_info_list = list()
         self.param_history = list()
         self.max_memory = 5
         self.gen_confs = np.zeros(self.max_memory)
         self.gen_trace = np.zeros(self.max_memory)
-
-        self.par_inits = dict()
 
     '''
     Forward the discriminator with the given name
@@ -113,15 +122,19 @@ class BabyGAN:
             weight_filler=Filler("xavier"), bias_filler=Filler("constant", 0.0)))
         #net.f(BatchNorm(bn_1, bottoms=[hlayer_1], param_names=[bn_m_1, bn_v_1, bn_c_1],
         #    use_global_stats = global_stats, moving_average_fraction=avg_momentum, param_lr_mults=[0.,0.,0.]))
-        net.f(ReLU(relu_1, bottoms=[hlayer_1], negative_slope=0.2))
-        #net.f(TanH(relu_1, bottoms=[hlayer_1]))
+        if self.d_activaton = 'relu':
+            net.f(ReLU(relu_1, bottoms=[hlayer_1], negative_slope=0.2))
+        else:
+            net.f(TanH(relu_1, bottoms=[hlayer_1]))
 
         net.f(InnerProduct(hlayer_2, h_size, bottoms=[relu_1], param_names=[hw_2, hb_2],
             weight_filler=Filler("xavier"), bias_filler=Filler("constant", 0.0)))
         #net.f(BatchNorm(bn_2, bottoms=[hlayer_2], param_names=['bn0', 'bn1', 'bn2'],
         #    use_global_stats = global_stats, moving_average_fraction=avg_momentum))
-        net.f(ReLU(relu_2, bottoms=[hlayer_2], negative_slope=0.2))
-        #net.f(TanH(relu_2, bottoms=[hlayer_2]))
+        if self.d_activaton = 'relu':
+            net.f(ReLU(relu_2, bottoms=[hlayer_2], negative_slope=0.2))
+        else:
+            net.f(TanH(relu_2, bottoms=[hlayer_2]))
 
         #net.f(InnerProduct(hlayer_3, h_size, bottoms=[relu_2], param_names=[hw_3, hb_3],
         #    weight_filler=Filler("xavier"), bias_filler=Filler("constant", 0.0)))
@@ -156,6 +169,7 @@ class BabyGAN:
         hlayer_4 = 'g_hlayer_4_%s' % name
         relu_4 = 'g_relu_4_%s' % name
         data = 'g_data_%s' % name
+        sig = 'g_sig_%s' % name
         bn_1 = 'bn_1_%s_%s' % (name,phase)
         bn_2 = 'bn_2_%s_%s' % (name,phase)
         
@@ -195,15 +209,19 @@ class BabyGAN:
             weight_filler=Filler("xavier"), bias_filler=Filler("constant", 0.0)))
         #net.f(BatchNorm(bn_1, bottoms=[hlayer_1], param_names=[bn_m_1, bn_v_1, bn_c_1],
         #    use_global_stats = global_stats, moving_average_fraction=avg_momentum, param_lr_mults=[0.,0.,0.]))
-        net.f(ReLU(relu_1, bottoms=[hlayer_1]))
-        #net.f(TanH(relu_1, bottoms=[hlayer_1]))
+        if self.g_activaton = 'relu':
+            net.f(ReLU(relu_1, bottoms=[hlayer_1]))
+        else:
+            net.f(TanH(relu_1, bottoms=[hlayer_1]))
         
         net.f(InnerProduct(hlayer_2, h_size, bottoms=[relu_1], param_names=[hw_2, hb_2],
             weight_filler=Filler("xavier"), bias_filler=Filler("constant", 0.0)))
         #net.f(BatchNorm(bn_1, bottoms=[hlayer_1], param_names=[bn_m_1, bn_v_1, bn_c_1],
         #    use_global_stats = global_stats, moving_average_fraction=avg_momentum, param_lr_mults=[0.,0.,0.]))
-        net.f(ReLU(relu_2, bottoms=[hlayer_2]))
-        #net.f(TanH(relu_2, bottoms=[hlayer_2]))
+        if self.g_activaton = 'relu':
+            net.f(ReLU(relu_2, bottoms=[hlayer_2]))
+        else:
+            net.f(TanH(relu_2, bottoms=[hlayer_2]))
 
         #net.f(InnerProduct(hlayer_3, h_size, bottoms=[relu_2], param_names=[hw_3, hb_3],
         #    weight_filler=Filler("xavier"), bias_filler=Filler("constant", 0.0)))
@@ -221,6 +239,7 @@ class BabyGAN:
         
         net.f(InnerProduct(data, self.data_dim , bottoms=[relu_2], param_names=[w, b],
             weight_filler=Filler("xavier"), bias_filler=Filler("constant", 0.0)))
+        
         return data
     
     '''
@@ -239,6 +258,8 @@ class BabyGAN:
         net.f(NumpyData(gt, target_array))
         if loss_type == 'wass':
             net.f(PyWeightedMeanLoss(loss, bottoms=[bottom, gt], loss_weight=loss_weight))
+        elif loss_type == 'hell':
+            net.f(PyHellingerLoss(loss, bottoms=[bottom], loss_weight=loss_weight))
         else:
             net.f(SigmoidCrossEntropyLoss(loss, bottoms=[bottom, gt], loss_weight=loss_weight))
         return loss
@@ -339,14 +360,21 @@ class BabyGAN:
     def g_one_step(self, z_layer, batch_size, update=False, phase='train'):
         net = self.net
         self.clean_network()
+        sig = 'd_sig_logit'
         
         ### forward generator and get the generated layer in data: batch_size*data_dim
         g_layer = self.g_forward(self.g_name, self.g_var_name, z_layer, phase=phase)
         ### forward discriminator and get gen logits: batch_size*1
         g_logit = self.d_forward(self.d_name_gen, self.d_var_name, g_layer, phase=phase)
-        
         ### get loss and update generator variables only (argmax log D(G(z)) )
-        g_loss = self.log_loss(self.g_loss_name, g_logit, 1.0, loss_weight=1.0, loss_type=self.loss_type)
+        ### >>> HELLINGER CHANGE HERE
+        if self.g_loss_type == 'hell':
+            net.f(Sigmoid(sig, bottoms=[g_logit]))
+            g_loss = self.log_loss(self.g_loss_name, sig, 1.0, loss_weight=1.0, loss_type=self.g_loss_type)
+        elif self.g_loss_type == 'modified':
+            g_loss = self.log_loss(self.g_loss_name, g_logit, 1.0, loss_weight=1.0, loss_type=self.g_loss_type)
+        else:
+            g_loss = self.log_loss(self.g_loss_name, g_logit, 0.0, loss_weight=-1.0, loss_type=self.g_loss_type)
         net.backward()
         
         ### logs
@@ -398,7 +426,8 @@ class BabyGAN:
                 return net.blobs[u_logit].data.flatten()
         
         ### sample z from uniform (-1,1)
-        z_data = np.random.uniform(low=-4.0, high=4.0, size=(batch_size, self.z_dim))
+        z_data = np.random.uniform(low=-self.z_range, high=self.z_range, size=(batch_size, self.z_dim))
+        #z_data = np.random.normal(loc=0.0, scale=1.0, size=(batch_size, self.z_dim))
         net.f(NumpyData(z_layer, z_data))
         if gen_only:
             g_layer = self.g_forward(self.g_name, self.g_var_name, z_layer, phase='eval')
