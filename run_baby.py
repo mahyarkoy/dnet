@@ -13,6 +13,8 @@ Created on Tue Aug  8 11:10:34 2017
 
 import numpy as np
 import baby_gan
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import os
 from progressbar import ETA, Bar, Percentage, ProgressBar
