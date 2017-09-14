@@ -208,6 +208,8 @@ if __name__ == '__main__':
     test_size = 100
     data_dim = 2
     fov = 4 ## field of view in field plot
+    d_draw = False
+    g_draw = True
 
     centers = [[-1.0, 0.0], [1.0, 0.0], [0.0, 1.0], [0.0, -1.0]]
     stds = [[0.02, 0.02], [0.02, 0.02], [0.02, 0.02], [0.02, 0.02]]
@@ -266,14 +268,15 @@ if __name__ == '__main__':
             d_r_logs.append(logs[1])
             d_g_logs.append(logs[2])
             ### calculate and plot field of decision
-            if data_dim == 1:
-                field_params = baby_gan_field_1d(baby, -fov, fov, batch_size*10)
-                plot_field_1d(field_params, (d_data, batch_data), (g_data, batch_g_data), 0,
-                    log_path_png+'/field_%d.png' % itr_total, 'DIS_%d_%d_%d' % (d_itr%d_updates, g_itr, itr_total))    
-            else:
-                field_params = baby_gan_field_2d(baby, -fov, fov, -fov, fov, batch_size*10)
-                plot_field_2d(field_params, (d_data, batch_data), (g_data, batch_g_data), 0,
-                    log_path_png+'/field_%d.png' % itr_total, 'DIS_%d_%d_%d' % (d_itr%d_updates, g_itr, itr_total))
+            if d_draw:
+                if data_dim == 1:
+                    field_params = baby_gan_field_1d(baby, -fov, fov, batch_size*10)
+                    plot_field_1d(field_params, (d_data, batch_data), (g_data, batch_g_data), 0,
+                        log_path_png+'/field_%d.png' % itr_total, 'DIS_%d_%d_%d' % (d_itr%d_updates, g_itr, itr_total))    
+                else:
+                    field_params = baby_gan_field_2d(baby, -fov, fov, -fov, fov, batch_size*10)
+                    plot_field_2d(field_params, (d_data, batch_data), (g_data, batch_g_data), 0,
+                        log_path_png+'/field_%d.png' % itr_total, 'DIS_%d_%d_%d' % (d_itr%d_updates, g_itr, itr_total))
             d_itr += 1
             itr_total += 1
             ### generator updates: g_updates times for each d_updates of discriminator
@@ -284,12 +287,17 @@ if __name__ == '__main__':
                     g_logs.append(logs[0])
                     d_r_logs.append(logs[1])
                     d_g_logs.append(logs[2])
-                    if data_dim == 1:
-                        plot_field_1d(field_params, (d_data, batch_data), (g_data, batch_g_data), 0,
-                            log_path_png+'/field_%d.png' % itr_total, 'GEN_%d_%d_%d' % (gn, g_itr, itr_total))
-                    else:
-                        plot_field_2d(field_params, (d_data, batch_data), (g_data, batch_g_data), 0,
-                            log_path_png+'/field_%d.png' % itr_total, 'GEN_%d_%d_%d' % (gn, g_itr, itr_total))
+                    if g_draw:
+                        if data_dim == 1:
+                            if not d_draw:
+                                field_params = baby_gan_field_1d(baby, -fov, fov, batch_size*10)
+                            plot_field_1d(field_params, (d_data, batch_data), (g_data, batch_g_data), 0,
+                                log_path_png+'/field_%d.png' % itr_total, 'GEN_%d_%d_%d' % (gn, g_itr, itr_total))
+                        else:
+                            if not d_draw:
+                                field_params = baby_gan_field_2d(baby, -fov, fov, -fov, fov, batch_size*10)
+                            plot_field_2d(field_params, (d_data, batch_data), (g_data, batch_g_data), 0,
+                                log_path_png+'/field_%d.png' % itr_total, 'GEN_%d_%d_%d' % (gn, g_itr, itr_total))
                     g_itr += 1
                     itr_total += 1
                 #_, dis_confs, trace = baby.gen_consolidate(count=50)
