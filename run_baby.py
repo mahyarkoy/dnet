@@ -134,12 +134,15 @@ def plot_field_2d(field_params, fov, (r_data, br_data), (g_data, bg_data), fignu
     #surf = ax.plot_trisurf(field_params[0].flatten(), field_params[1].flatten(), field_params[2].flatten(),
     #    triangles=field_params[4].triangles, cmap=cm.CMRmap, alpha=0.2)
     surf = ax.plot_surface(field_params[0], field_params[1], field_params[2], rstride=1, cstride=1, cmap=cm.jet,
-                       linewidth=0.1, antialiased=False, alpha=0.8)
-    #ax.set_zlim(-1.01, 1.01)
+                       linewidth=0, antialiased=False, alpha=0.7, edgecolors='lightgrey')
+    #ax.set_zlim(field_params[2].min()-1, field_params[2].max())
+    zlim_low = min(field_params[2].min()-1, -5)
+    zlim_high = max(field_params[2].max(), 5)
+    ax.set_zlim(zlim_low, zlim_high)
     fig.colorbar(surf, shrink=0.5, aspect=10)
     #cset = ax.contour(field_params[0], field_params[1], field_params[2], zdir='x', offset=field_params[3][0]-0.5, cmap=cm.jet)
     #cset = ax.contour(field_params[0], field_params[1], field_params[2], zdir='y', offset=field_params[3][3]+0.5, cmap=cm.jet)
-    cset = ax.contour(field_params[0], field_params[1], field_params[2], zdir='z', offset=field_params[2].min(), cmap=cm.jet)
+    cset = ax.contour(field_params[0], field_params[1], field_params[2], zdir='z', offset=zlim_low, cmap=cm.jet)
     ax.set_title(title+'_score_surf')
     
     fig.savefig(save_path)
