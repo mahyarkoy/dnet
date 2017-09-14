@@ -170,9 +170,9 @@ class PyHellingerLoss(PyLayer):
     ### loss = sum sqrt(bottom * (1-bottom)) /N
     def forward(self, bottom, top):
         top[0].reshape((1,))
-        top[0].data[...] = 1.0 * self.loss_weight * np.sum(np.sqrt(bottom[0].data * (1 - bottom[0].data))) / bottom[0].shape[0]
+        top[0].data[...] = -1.0 * self.loss_weight * np.sum(np.sqrt(bottom[0].data * (1 - bottom[0].data))) / bottom[0].shape[0]
         return top[0].data.item()
 
     ### grad: 0.5 * (1-2*bottom) / (sqrt(bottom * (1-bottom)) + eps) /N
     def backward(self, top, bottom):
-        bottom[0].diff[...] += 0.5 * self.loss_weight * (1-2*bottom[0].data) / (np.sqrt(bottom[0].data*(1-bottom[0].data)) + 1e-8) / bottom[0].shape[0]
+        bottom[0].diff[...] += -0.5 * self.loss_weight * (1-2*bottom[0].data) / (np.sqrt(bottom[0].data*(1-bottom[0].data)) + 1e-8) / bottom[0].shape[0]

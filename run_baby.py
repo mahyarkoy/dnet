@@ -23,6 +23,7 @@ from matplotlib import cm
 import matplotlib.tri as mtri
 from sklearn.neighbors.kde import KernelDensity
 import argparse
+print matplotlib.get_backend()
 
 arg_parser = argparse.ArgumentParser()
 arg_parser.add_argument('-l', '--log-path', dest='log_path', required=True, help='log directory to store logs.')
@@ -107,7 +108,7 @@ def baby_gan_field_1d(baby, x_min, x_max, batch_size):
     return (data_mat, logits, (x_min, x_max))
 
 
-def plot_field_2d(field_params, (r_data, br_data), (g_data, bg_data), fignum, save_path, title):
+def plot_field_2d(field_params, fov, (r_data, br_data), (g_data, bg_data), fignum, save_path, title):
     # plot the line, the points, and the nearest vectors to the plane
     fig = plt.figure(fignum, figsize=(12,20))
     fig.clf()
@@ -132,12 +133,13 @@ def plot_field_2d(field_params, (r_data, br_data), (g_data, bg_data), fignum, sa
     ax = fig.add_subplot(2, 1, 2, projection='3d')
     #surf = ax.plot_trisurf(field_params[0].flatten(), field_params[1].flatten(), field_params[2].flatten(),
     #    triangles=field_params[4].triangles, cmap=cm.CMRmap, alpha=0.2)
-    surf = ax.plot_surface(field_params[0], field_params[1], field_params[2], rstride=1, cstride=1, cmap=cm.CMRmap,
-                       linewidth=1, antialiased=False, alpha=0.6)
+    surf = ax.plot_surface(field_params[0], field_params[1], field_params[2], rstride=1, cstride=1, cmap=cm.jet,
+                       linewidth=0.1, antialiased=False, alpha=0.8)
     #ax.set_zlim(-1.01, 1.01)
     fig.colorbar(surf, shrink=0.5, aspect=10)
-    cset = ax.contour(field_params[0], field_params[1], field_params[2], zdir='x', offset=-5, cmap=cm.Spectral)
-    cset = ax.contour(field_params[0], field_params[1], field_params[2], zdir='y', offset=5, cmap=cm.Spectral)
+    #cset = ax.contour(field_params[0], field_params[1], field_params[2], zdir='x', offset=field_params[3][0]-0.5, cmap=cm.jet)
+    #cset = ax.contour(field_params[0], field_params[1], field_params[2], zdir='y', offset=field_params[3][3]+0.5, cmap=cm.jet)
+    cset = ax.contour(field_params[0], field_params[1], field_params[2], zdir='z', offset=field_params[2].min(), cmap=cm.jet)
     ax.set_title(title+'_score_surf')
     
     fig.savefig(save_path)
@@ -274,11 +276,11 @@ if __name__ == '__main__':
                 if data_dim == 1:
                     field_params = baby_gan_field_1d(baby, -fov, fov, batch_size*10)
                     plot_field_1d(field_params, (d_data, batch_data), (g_data, batch_g_data), 0,
-                        log_path_png+'/field_%d.png' % itr_total, 'DIS_%d_%d_%d' % (d_itr%d_updates, g_itr, itr_total))    
+                        log_path_png+'/field_%06d.png' % itr_total, 'DIS_%d_%d_%d' % (d_itr%d_updates, g_itr, itr_total))    
                 else:
                     field_params = baby_gan_field_2d(baby, -fov, fov, -fov, fov, batch_size*10)
-                    plot_field_2d(field_params, (d_data, batch_data), (g_data, batch_g_data), 0,
-                        log_path_png+'/field_%d.png' % itr_total, 'DIS_%d_%d_%d' % (d_itr%d_updates, g_itr, itr_total))
+                    plot_field_2d(field_params, fov, (d_data, batch_data), (g_data, batch_g_data), 0,
+                        log_path_png+'/field_%06d.png' % itr_total, 'DIS_%d_%d_%d' % (d_itr%d_updates, g_itr, itr_total))
             d_itr += 1
             itr_total += 1
             ### generator updates: g_updates times for each d_updates of discriminator
@@ -294,12 +296,12 @@ if __name__ == '__main__':
                             if not d_draw:
                                 field_params = baby_gan_field_1d(baby, -fov, fov, batch_size*10)
                             plot_field_1d(field_params, (d_data, batch_data), (g_data, batch_g_data), 0,
-                                log_path_png+'/field_%d.png' % itr_total, 'GEN_%d_%d_%d' % (gn, g_itr, itr_total))
+                                log_path_png+'/field_%06d.png' % itr_total, 'GEN_%d_%d_%d' % (gn, g_itr, itr_total))
                         else:
                             if not d_draw:
                                 field_params = baby_gan_field_2d(baby, -fov, fov, -fov, fov, batch_size*10)
-                            plot_field_2d(field_params, (d_data, batch_data), (g_data, batch_g_data), 0,
-                                log_path_png+'/field_%d.png' % itr_total, 'GEN_%d_%d_%d' % (gn, g_itr, itr_total))
+                            plot_field_2d(field_params, fov, (d_data, batch_data), (g_data, batch_g_data), 0,
+                                log_path_png+'/field_%06d.png' % itr_total, 'GEN_%d_%d_%d' % (gn, g_itr, itr_total))
                     g_itr += 1
                     itr_total += 1
                 #_, dis_confs, trace = baby.gen_consolidate(count=50)
