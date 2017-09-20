@@ -215,8 +215,8 @@ if __name__ == '__main__':
     test_size = 100
     data_dim = 2
     fov = 4 ## field of view in field plot
-    d_draw = False
-    g_draw = True
+    d_draw = 1
+    g_draw = 1
 
     centers = [[-1.0, 0.0], [1.0, 0.0], [0.0, 1.0], [0.0, -1.0]]
     stds = [[0.02, 0.02], [0.02, 0.02], [0.02, 0.02], [0.02, 0.02]]
@@ -237,8 +237,8 @@ if __name__ == '__main__':
 
     ### baby gan training
     epochs = 100
-    d_updates = 10
-    g_updates = 1
+    d_updates = 1
+    g_updates = 10
     baby = baby_gan.BabyGAN(data_dim)
     batch_size = 512
     field_sample_size = 100
@@ -246,7 +246,7 @@ if __name__ == '__main__':
     itr_total = 0
     g_itr = 0
     d_itr = 0
-    g_max_itr = 1e4
+    g_max_itr = 2e4
     max_itr_total = np.ceil(train_size*1.0 / batch_size + train_size*1.0 / batch_size / d_updates * g_updates)
     widgets = ["baby_gan", Percentage(), Bar(), ETA()]
     pbar = ProgressBar(maxval=g_max_itr, widgets=widgets)
@@ -275,7 +275,8 @@ if __name__ == '__main__':
             d_r_logs.append(logs[1])
             d_g_logs.append(logs[2])
             ### calculate and plot field of decision
-            if d_draw:
+            field_params = None
+            if d_draw > 0 and d_itr % d_draw == 0:
                 if data_dim == 1:
                     field_params = baby_gan_field_1d(baby, -fov, fov, batch_size*10)
                     plot_field_1d(field_params, (d_data, batch_data), (g_data, batch_g_data), 0,
@@ -294,14 +295,14 @@ if __name__ == '__main__':
                     g_logs.append(logs[0])
                     d_r_logs.append(logs[1])
                     d_g_logs.append(logs[2])
-                    if g_draw:
+                    if g_draw > 0 and g_itr % g_draw == 0:
                         if data_dim == 1:
-                            if not d_draw:
+                            if not field_params:
                                 field_params = baby_gan_field_1d(baby, -fov, fov, batch_size*10)
                             plot_field_1d(field_params, (d_data, batch_data), (g_data, batch_g_data), 0,
                                 log_path_png+'/field_%06d.png' % itr_total, 'GEN_%d_%d_%d' % (gn, g_itr, itr_total))
                         else:
-                            if not d_draw:
+                            if not field_params:
                                 field_params = baby_gan_field_2d(baby, -fov, fov, -fov, fov, batch_size*10)
                             plot_field_2d(field_params, fov, (d_data, batch_data), (g_data, batch_g_data), 0,
                                 log_path_png+'/field_%06d.png' % itr_total, 'GEN_%d_%d_%d' % (gn, g_itr, itr_total))

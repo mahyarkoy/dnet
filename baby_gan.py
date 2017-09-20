@@ -54,7 +54,7 @@ class BabyGAN:
         self.z_range = 1.0
         self.data_dim = data_dim
         self.d_loss_type = 'log'
-        self.g_loss_type = 'mod'
+        self.g_loss_type = 'hel'
         self.d_activaton = 'tanh'
         self.g_activaton = 'tanh'
 
