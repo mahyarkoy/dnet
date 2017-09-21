@@ -189,9 +189,9 @@ class PyLeastSquareLoss(PyLayer):
     def forward(self, bottom, top):
         top[0].reshape((1,))
         bottom[1].reshape(bottom[0].shape)
-        top[0].data[...] = -1.0 * self.loss_weight * np.mean(np.square(bottom[0].data - bottom[1].data))
+        top[0].data[...] = 1.0 * self.loss_weight * np.mean(np.square(bottom[0].data - bottom[1].data))
         return top[0].data.item()
 
     ### grad: -2 * (bottom[0] - bottom[1]) /N
     def backward(self, top, bottom):
-        bottom[0].diff[...] += -2.0 * self.loss_weight * (bottom[0].data - bottom[1].data) / bottom[0].shape[0]
+        bottom[0].diff[...] += 2.0 * self.loss_weight * (bottom[0].data - bottom[1].data) / bottom[0].shape[0]

@@ -250,6 +250,7 @@ class BabyGAN:
     def log_loss(self, name, bottom, target, loss_weight, loss_type='log'):
         gt = 'loss_gt_%s' % name
         loss = 'loss_val_%s' % name
+        sig = 'sig_val_%s' % name
         
         net = self.net
         if target == 0:
@@ -259,9 +260,11 @@ class BabyGAN:
         if loss_type == 'was':
             net.f(PyWeightedMeanLoss(loss, bottoms=[bottom, gt], loss_weight=loss_weight))
         elif loss_type == 'hel':
-            net.f(PyHellingerLoss(loss, bottoms=[bottom], loss_weight=loss_weight))
+            net.f(Sigmoid(sig, bottoms=[bottom]))
+            net.f(PyHellingerLoss(loss, bottoms=[sig], loss_weight=loss_weight))
         elif loss_type == 'lsq':
-            net.f(PyLeastSquareLoss(loss, bottoms=[bottom, gt], loss_weight=loss_weight))
+            net.f(Sigmoid(sig, bottoms=[bottom]))
+            net.f(PyLeastSquareLoss(loss, bottoms=[sig, gt], loss_weight=loss_weight))
         else:
             net.f(SigmoidCrossEntropyLoss(loss, bottoms=[bottom, gt], loss_weight=loss_weight))
         return loss
@@ -370,13 +373,10 @@ class BabyGAN:
         g_logit = self.d_forward(self.d_name_gen, self.d_var_name, g_layer, phase=phase)
         ### get loss and update generator variables only (argmax log D(G(z)) )
         ### >>> HELLINGER CHANGE HERE
-        if self.g_loss_type == 'hel':
-            net.f(Sigmoid(sig, bottoms=[g_logit]))
-            g_loss = self.log_loss(self.g_loss_name, sig, 1.0, loss_weight=1.0, loss_type=self.g_loss_type)
-        elif self.g_loss_type == 'mod' or self.g_loss_type == 'was':
-            g_loss = self.log_loss(self.g_loss_name, g_logit, 1.0, loss_weight=1.0, loss_type=self.g_loss_type)
-        else:
+        if self.g_loss_type == 'log':
             g_loss = self.log_loss(self.g_loss_name, g_logit, 0.0, loss_weight=-1.0, loss_type=self.g_loss_type)
+        else: ## mod was hel
+            g_loss = self.log_loss(self.g_loss_name, g_logit, 1.0, loss_weight=1.0, loss_type=self.g_loss_type)
         net.backward()
         
         ### logs
