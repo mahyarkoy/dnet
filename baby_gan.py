@@ -11,7 +11,7 @@ from collections import defaultdict, namedtuple
 import apollocaffe
 from apollocaffe.layers import *
 import adam, adadelta
-from pylayers import PyBackMultLayer, PyWeightedMeanLoss, PyHellingerLoss
+from pylayers import PyBackMultLayer, PyWeightedMeanLoss, PyHellingerLoss, PyLeastSquareLoss
 import os
 
 apollocaffe.set_random_seed(0)
@@ -53,7 +53,7 @@ class BabyGAN:
         self.z_dim = 256
         self.z_range = 1.0
         self.data_dim = data_dim
-        self.d_loss_type = 'log'
+        self.d_loss_type = 'lsq'
         self.g_loss_type = 'hel'
         self.d_activaton = 'tanh'
         self.g_activaton = 'tanh'
@@ -260,6 +260,8 @@ class BabyGAN:
             net.f(PyWeightedMeanLoss(loss, bottoms=[bottom, gt], loss_weight=loss_weight))
         elif loss_type == 'hel':
             net.f(PyHellingerLoss(loss, bottoms=[bottom], loss_weight=loss_weight))
+        elif loss_type == 'lsq':
+            net.f(PyLeastSquareLoss(loss, bottoms=[bottom, gt], loss_weight=loss_weight))
         else:
             net.f(SigmoidCrossEntropyLoss(loss, bottoms=[bottom, gt], loss_weight=loss_weight))
         return loss

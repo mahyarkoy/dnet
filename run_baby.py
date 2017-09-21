@@ -238,7 +238,7 @@ if __name__ == '__main__':
     ### baby gan training
     epochs = 100
     d_updates = 1
-    g_updates = 10
+    g_updates = 1
     baby = baby_gan.BabyGAN(data_dim)
     batch_size = 512
     field_sample_size = 100
@@ -246,7 +246,7 @@ if __name__ == '__main__':
     itr_total = 0
     g_itr = 0
     d_itr = 0
-    g_max_itr = 2e4
+    g_max_itr = 1e4
     max_itr_total = np.ceil(train_size*1.0 / batch_size + train_size*1.0 / batch_size / d_updates * g_updates)
     widgets = ["baby_gan", Percentage(), Bar(), ETA()]
     pbar = ProgressBar(maxval=g_max_itr, widgets=widgets)

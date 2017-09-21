@@ -167,12 +167,31 @@ class PyHellingerLoss(PyLayer):
     def reshape(self, bottom, top):
         top[0].reshape((1,))
 
-    ### loss = sum sqrt(bottom * (1-bottom)) /N
+    ### loss = -sum sqrt(bottom * (1-bottom)) /N
     def forward(self, bottom, top):
         top[0].reshape((1,))
         top[0].data[...] = -1.0 * self.loss_weight * np.sum(np.sqrt(bottom[0].data * (1 - bottom[0].data))) / bottom[0].shape[0]
         return top[0].data.item()
 
-    ### grad: 0.5 * (1-2*bottom) / (sqrt(bottom * (1-bottom)) + eps) /N
+    ### grad: -0.5 * (1-2*bottom) / (sqrt(bottom * (1-bottom)) + eps) /N
     def backward(self, top, bottom):
         bottom[0].diff[...] += -0.5 * self.loss_weight * (1-2*bottom[0].data) / (np.sqrt(bottom[0].data*(1-bottom[0].data)) + 1e-8) / bottom[0].shape[0]
+
+class PyLeastSquareLoss(PyLayer):
+    def __init__(self, name, loss_weight=1.0, **kwargs):
+        PyLayer.__init__(self, name, dict(), **kwargs)
+        self.loss_weight = loss_weight
+
+    def reshape(self, bottom, top):
+        top[0].reshape((1,))
+
+    ### loss = - sum (bottom[0] - bottom[1])^2) /N
+    def forward(self, bottom, top):
+        top[0].reshape((1,))
+        bottom[1].reshape(bottom[0].shape)
+        top[0].data[...] = -1.0 * self.loss_weight * np.mean(np.square(bottom[0].data - bottom[1].data))
+        return top[0].data.item()
+
+    ### grad: -2 * (bottom[0] - bottom[1]) /N
+    def backward(self, top, bottom):
+        bottom[0].diff[...] += -2.0 * self.loss_weight * (bottom[0].data - bottom[1].data) / bottom[0].shape[0]
