@@ -14,7 +14,7 @@ def linear(input_, output_size, scope=None, stddev=0.02, bias_start=0.0, with_w=
 	shape = input_.get_shape().as_list()
 	with tf.variable_scope(scope or "Linear"):
 		matrix = tf.get_variable("Matrix", [shape[1], output_size], tf.float64,
-								 tf.random_normal_initializer(stddev=stddev))
+								 tf.contrib.layers.xavier_initializer())
 		bias = tf.get_variable("bias", [output_size], tf.float64,
 			initializer=tf.constant_initializer(bias_start))
 		if with_w:
@@ -113,8 +113,8 @@ class TFBabyGAN:
 		g_param_diff = 1.0 * diff / len(self.g_vars)
 
 		### build optimizers
-		self.g_opt = tf.train.AdamOptimizer(self.g_lr, beta1=self.g_beta).minimize(self.g_loss, var_list=self.g_vars)
-		self.d_opt = tf.train.AdamOptimizer(self.d_lr, beta1=self.d_beta).minimize(self.d_loss, var_list=self.d_vars)
+		self.g_opt = tf.train.AdamOptimizer(self.g_lr, beta1=self.g_beta, beta2=self.g_beta).minimize(self.g_loss, var_list=self.g_vars)
+		self.d_opt = tf.train.AdamOptimizer(self.d_lr, beta1=self.d_beta, beta2=self.d_beta).minimize(self.d_loss, var_list=self.d_vars)
 
 		### summaries
 		self.d_r_logs = [self.d_r_loss, r_logits_mean, d_r_logits_diff, d_r_param_diff]
@@ -145,11 +145,11 @@ class TFBabyGAN:
 			h2 = linear(h1, h2_size, scope='fc2')
 			h2 = act(h2)
 
-			o = linear(h1, self.s_dim, scope='fco')
+			o = linear(h2, 1, scope='fco')
 			return o
 
 	def start_session(self):
-		gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=1.0)
+		gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.8)
 		config = tf.ConfigProto(allow_soft_placement=False, gpu_options=gpu_options)
 		self.saver = tf.train.Saver(tf.global_variables(), keep_checkpoint_every_n_hours=1)
 		self.sess = tf.Session(config=config)

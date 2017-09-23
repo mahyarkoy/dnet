@@ -13,6 +13,7 @@ Created on Tue Aug  8 11:10:34 2017
 
 import numpy as np
 import baby_gan
+import tf_baby_gan
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -237,7 +238,7 @@ def train_baby_gan(baby, centers, stds):
 	d_itr = 0
 	g_itr = 0
 	itr_total = 0
-	g_max_itr = 1e4
+	g_max_itr = 1e2
 	widgets = ["baby_gan", Percentage(), Bar(), ETA()]
 	pbar = ProgressBar(maxval=g_max_itr, widgets=widgets)
 	pbar.start()
@@ -354,7 +355,8 @@ if __name__ == '__main__':
 	centers = [[-1.0, 0.0], [1.0, 0.0], [0.0, 1.0], [0.0, -1.0]]
 	stds = [[0.02, 0.02], [0.02, 0.02], [0.02, 0.02], [0.02, 0.02]]
 	data_dim = len(centers[0])
-	baby = baby_gan.BabyGAN(data_dim)
+	#baby = baby_gan.BabyGAN(data_dim)
+	baby = tf_baby_gan.TFBabyGAN(data_dim)
 
 	train_baby_gan(baby, centers, stds)
 
