@@ -53,8 +53,8 @@ class BabyGAN:
         self.z_dim = 256
         self.z_range = 1.0
         self.data_dim = data_dim
-        self.d_loss_type = 'lsq'
-        self.g_loss_type = 'hel'
+        self.d_loss_type = 'log'
+        self.g_loss_type = 'mod'
         self.d_activaton = 'tanh'
         self.g_activaton = 'tanh'
 
@@ -448,6 +448,11 @@ class BabyGAN:
 
         return logs, g_data
 
+    def save(self, fname):
+        self.net.save(fname)
+
+    def load(self, fname):
+        self.net.load(fname)
     '''
     Updates stored fisher information variables which are used in gen_updates to consolidate previous gens
     Returns the current gen_conf

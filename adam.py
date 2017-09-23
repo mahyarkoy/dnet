@@ -64,6 +64,6 @@ def update(net, state, config, update_param_key=None, loss_type='log'):
         param.data[...] -= lr * update
         param.diff[...] = 0.0
         if loss_type == 'was' and update_param_key == 'd_':
-            weight_clip = 0.01
+            weight_clip = 0.05
             param.data[param.data[...] > weight_clip] = weight_clip
             param.data[param.data[...] < -weight_clip] = -weight_clip
