@@ -55,8 +55,8 @@ class BabyGAN:
         self.data_dim = data_dim
         self.d_loss_type = 'log'
         self.g_loss_type = 'mod'
-        self.d_activaton = 'tanh'
-        self.g_activaton = 'tanh'
+        self.d_act = 'tanh'
+        self.g_act = 'tanh'
 
         ### Fisher parametes
         self.fisher_info_list = list()
@@ -122,7 +122,7 @@ class BabyGAN:
             weight_filler=Filler("xavier"), bias_filler=Filler("constant", 0.0)))
         #net.f(BatchNorm(bn_1, bottoms=[hlayer_1], param_names=[bn_m_1, bn_v_1, bn_c_1],
         #    use_global_stats = global_stats, moving_average_fraction=avg_momentum, param_lr_mults=[0.,0.,0.]))
-        if self.d_activaton == 'relu':
+        if self.d_act == 'relu':
             net.f(ReLU(relu_1, bottoms=[hlayer_1], negative_slope=0.2))
         else:
             net.f(TanH(relu_1, bottoms=[hlayer_1]))
@@ -131,7 +131,7 @@ class BabyGAN:
             weight_filler=Filler("xavier"), bias_filler=Filler("constant", 0.0)))
         #net.f(BatchNorm(bn_2, bottoms=[hlayer_2], param_names=['bn0', 'bn1', 'bn2'],
         #    use_global_stats = global_stats, moving_average_fraction=avg_momentum))
-        if self.d_activaton == 'relu':
+        if self.d_act == 'relu':
             net.f(ReLU(relu_2, bottoms=[hlayer_2], negative_slope=0.2))
         else:
             net.f(TanH(relu_2, bottoms=[hlayer_2]))
@@ -209,7 +209,7 @@ class BabyGAN:
             weight_filler=Filler("xavier"), bias_filler=Filler("constant", 0.0)))
         #net.f(BatchNorm(bn_1, bottoms=[hlayer_1], param_names=[bn_m_1, bn_v_1, bn_c_1],
         #    use_global_stats = global_stats, moving_average_fraction=avg_momentum, param_lr_mults=[0.,0.,0.]))
-        if self.g_activaton == 'relu':
+        if self.g_act == 'relu':
             net.f(ReLU(relu_1, bottoms=[hlayer_1]))
         else:
             net.f(TanH(relu_1, bottoms=[hlayer_1]))
@@ -218,7 +218,7 @@ class BabyGAN:
             weight_filler=Filler("xavier"), bias_filler=Filler("constant", 0.0)))
         #net.f(BatchNorm(bn_1, bottoms=[hlayer_1], param_names=[bn_m_1, bn_v_1, bn_c_1],
         #    use_global_stats = global_stats, moving_average_fraction=avg_momentum, param_lr_mults=[0.,0.,0.]))
-        if self.g_activaton == 'relu':
+        if self.g_act == 'relu':
             net.f(ReLU(relu_2, bottoms=[hlayer_2]))
         else:
             net.f(TanH(relu_2, bottoms=[hlayer_2]))
@@ -303,9 +303,9 @@ class BabyGAN:
             if param_name.startswith('d_'):
                 param = net.params[param_name]
                 grad = param.diff * net.param_lr_mults(param_name)
-                param_sum += np.sum(np.square(grad))
-                count += grad.size
-        u_param_diff = (1.0 * param_sum / count) ** 0.5
+                param_sum += np.sqrt(np.mean(np.square(grad)))
+                count += 1
+        u_param_diff = 1.0 * param_sum / count
         return [u_acc, u_loss, u_logit_data, u_logit_diff, u_param_diff]
         
     '''
@@ -354,8 +354,10 @@ class BabyGAN:
             else:
                 adadelta.update(net, self.d_state, self.d_config, 'd_', self.d_loss_type)
 
-        return ([d_r_acc, d_r_loss, d_r_logit_data, d_r_logit_diff, d_r_param_diff],
-                [d_g_acc, d_g_loss, d_g_logit_data, d_g_logit_diff, d_g_param_diff])
+        #return ([d_r_acc, d_r_loss, d_r_logit_data, d_r_logit_diff, d_r_param_diff],
+        #        [d_g_acc, d_g_loss, d_g_logit_data, d_g_logit_diff, d_g_param_diff])
+        return ([d_r_loss, d_r_logit_data, d_r_logit_diff, d_r_param_diff],
+                [d_g_loss, d_g_logit_data, d_g_logit_diff, d_g_param_diff])
          
     '''
     Evaluate generator on gen inputs, then update the params of generator
@@ -391,9 +393,9 @@ class BabyGAN:
             if param_name.startswith('g_'):
                 param = net.params[param_name]
                 grad = param.diff * net.param_lr_mults(param_name)
-                param_sum += np.sum(np.square(grad))
-                count += grad.size
-        g_param_diff = (1.0 * param_sum / (count + 1e-5)) ** 0.5
+                param_sum += np.sqrt(np.mean(np.square(grad)))
+                count += 1
+        g_param_diff = 1.0 * param_sum / count
         
         ### update parameters with adam (no clipping)
         if update:
@@ -406,7 +408,8 @@ class BabyGAN:
             self.clean_network()
             g_layer = self.g_forward(self.g_name, self.g_var_name, z_layer, phase='eval')
         
-        return ([d_g_acc, g_loss, g_logit_data, g_logit_diff, g_out_diff, g_param_diff], net.blobs[g_layer].data)
+        #return ([d_g_acc, g_loss, g_logit_data, g_logit_diff, g_out_diff, g_param_diff], net.blobs[g_layer].data)
+        return ([g_loss, g_logit_diff, g_out_diff, g_param_diff], net.blobs[g_layer].data)
     
     '''
     If batch_data is not None: train disc and eval fixed gen and disc for one step

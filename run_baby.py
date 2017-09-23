@@ -323,9 +323,9 @@ def train_baby_gan(baby, centers, stds):
 	d_r_logs_mat = np.array(d_r_logs)
 	d_g_logs_mat = np.array(d_g_logs)
 	eval_logs_mat = np.array(eval_logs)
-	g_logs_names = ['g_d_acc', 'g_loss', 'g_logit_data', 'g_logit_diff', 'g_out_diff', 'g_param_diff']
-	d_r_logs_names = ['d_r_acc', 'd_r_loss', 'd_r_logit_data', 'd_r_logit_diff', 'd_r_param_diff']
-	d_g_logs_names = ['d_g_acc', 'd_g_loss', 'd_g_logit_data', 'd_g_logit_diff', 'd_g_param_diff']
+	g_logs_names = ['g_loss', 'g_logit_diff', 'g_out_diff', 'g_param_diff']
+	d_r_logs_names = ['d_r_loss', 'r_logit_data', 'd_r_logit_diff', 'd_r_param_diff']
+	d_g_logs_names = ['d_g_loss', 'g_logit_data', 'd_g_logit_diff', 'd_g_param_diff']
 	eval_logs_names = ['energy_distance', 'energy_distance_norm']
 
 	plot_time_mat(g_logs_mat, g_logs_names, 1, log_path)
