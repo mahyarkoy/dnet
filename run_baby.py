@@ -12,8 +12,8 @@ Created on Tue Aug  8 11:10:34 2017
 # for i in {0..7}; do mv baby_log_a"$((i))" baby_log_"$((i+74))"; done
 
 import numpy as np
-import baby_gan
 import tf_baby_gan
+import baby_gan
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt

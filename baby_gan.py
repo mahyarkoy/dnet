@@ -14,9 +14,9 @@ import adam, adadelta
 from pylayers import PyBackMultLayer, PyWeightedMeanLoss, PyHellingerLoss, PyLeastSquareLoss
 import os
 
+apollocaffe.set_device(0)
 apollocaffe.set_random_seed(0)
 np.random.seed(0)
-apollocaffe.set_device(0)
 OptConfig = namedtuple('OptConfig', 'rho eps lr clip')
 
 class BabyGAN:
