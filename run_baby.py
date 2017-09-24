@@ -238,7 +238,7 @@ def train_baby_gan(baby, centers, stds):
 	d_itr = 0
 	g_itr = 0
 	itr_total = 0
-	g_max_itr = 1e2
+	g_max_itr = 1e4
 	widgets = ["baby_gan", Percentage(), Bar(), ETA()]
 	pbar = ProgressBar(maxval=g_max_itr, widgets=widgets)
 	pbar.start()

@@ -1,5 +1,8 @@
 import numpy as np
 import tensorflow as tf
+import os
+os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID" # so the IDs match nvidia-smi
+os.environ["CUDA_VISIBLE_DEVICES"] = "0" # "0, 1" for multiple
 
 np.random.seed(0)
 tf.set_random_seed(0)
@@ -31,17 +34,14 @@ class TFBabyGAN:
 		self.d_lr = 1e-4
 		self.d_beta = 0.5
 
-		### running
-		self.gpu_id = 0
-
 		### network parameters
 		self.z_dim = 256
 		self.z_range = 1.0
 		self.data_dim = data_dim
 		self.d_loss_type = 'log'
 		self.g_loss_type = 'mod'
-		self.d_act = tf.nn.tanh
-		self.g_act = tf.nn.tanh
+		self.d_act = tf.tanh
+		self.g_act = tf.tanh
 		#self.d_act = lrelu
 		#self.g_act = tf.nn.relu
 
@@ -123,8 +123,8 @@ class TFBabyGAN:
 		
 
 	def build_gen(self, z, act):
-		h1_size = 1024
-		h2_size = 1024
+		h1_size = 128
+		h2_size = 128
 		with tf.variable_scope('g_net'):
 			h1 = linear(z, h1_size, scope='fc1')
 			h1 = act(h1)
@@ -136,8 +136,8 @@ class TFBabyGAN:
 			return o
 
 	def build_dis(self, data_layer, act, reuse=False):
-		h1_size = 1024
-		h2_size = 1024
+		h1_size = 128
+		h2_size = 128
 		with tf.variable_scope('d_net', reuse=reuse):
 			h1 = linear(data_layer, h1_size, scope='fc1')
 			h1 = act(h1)
@@ -149,8 +149,8 @@ class TFBabyGAN:
 			return o
 
 	def start_session(self):
-		gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.8)
-		config = tf.ConfigProto(allow_soft_placement=False, gpu_options=gpu_options)
+		gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.2)
+		config = tf.ConfigProto(allow_soft_placement=True, gpu_options=gpu_options)
 		self.saver = tf.train.Saver(tf.global_variables(), keep_checkpoint_every_n_hours=1)
 		self.sess = tf.Session(config=config)
 		self.sess.run(tf.global_variables_initializer())
