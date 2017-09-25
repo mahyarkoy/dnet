@@ -2,10 +2,13 @@ import numpy as np
 import tensorflow as tf
 import os
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID" # so the IDs match nvidia-smi
-os.environ["CUDA_VISIBLE_DEVICES"] = "0" # "0, 1" for multiple
+os.environ["CUDA_VISIBLE_DEVICES"] = "1" # "0, 1" for multiple
 
 np.random.seed(0)
 tf.set_random_seed(0)
+
+tf_dtype = tf.float32
+np_dtype = 'float32'
 
 def lrelu(x, leak=0.2, name="lrelu"):
 	with tf.variable_scope(name):
@@ -16,14 +19,26 @@ def lrelu(x, leak=0.2, name="lrelu"):
 def linear(input_, output_size, scope=None, stddev=0.02, bias_start=0.0, with_w=False):
 	shape = input_.get_shape().as_list()
 	with tf.variable_scope(scope or "Linear"):
-		matrix = tf.get_variable("Matrix", [shape[1], output_size], tf.float64,
+		matrix = tf.get_variable("Matrix", [shape[1], output_size], tf_dtype,
 								 tf.contrib.layers.xavier_initializer())
-		bias = tf.get_variable("bias", [output_size], tf.float64,
+		bias = tf.get_variable("bias", [output_size], tf_dtype,
 			initializer=tf.constant_initializer(bias_start))
 		if with_w:
 			return tf.matmul(input_, matrix) + bias, matrix, bias
 		else:
 			return tf.matmul(input_, matrix) + bias
+
+def dense_batch(x, h_size, scope, phase, reuse=False):
+    with tf.variable_scope(scope, reuse=reuse):
+        h1 = tf.contrib.layers.fully_connected(x, h_size, activation_fn=None, scope='dense')
+    with tf.variable_scope(scope):
+        h2 = tf.contrib.layers.batch_norm(h1, center=True, scale=True, is_training=phase, scope='bn_'+str(reuse))
+    return h2
+
+def dense(x, h_size, scope, reuse=False):
+    with tf.variable_scope(scope, reuse=reuse):
+        h1 = tf.contrib.layers.fully_connected(x, h_size, activation_fn=None, scope='dense')
+    return h1
 
 class TFBabyGAN:
 	def __init__(self, data_dim):
@@ -54,20 +69,21 @@ class TFBabyGAN:
 
 	def build_graph(self):
 		### define placeholders for image and label inputs
-		self.im_input = tf.placeholder(tf.float64, [None, self.data_dim], name='im_input')
-		self.z_input = tf.placeholder(tf.float64, [None, self.z_dim], name='z_input')
+		self.im_input = tf.placeholder(tf_dtype, [None, self.data_dim], name='im_input')
+		self.z_input = tf.placeholder(tf_dtype, [None, self.z_dim], name='z_input')
+		self.train_phase = tf.placeholder(tf.bool, name='phase')
 
 		### build generator
-		self.g_layer = self.build_gen(self.z_input, self.g_act)
+		self.g_layer = self.build_gen(self.z_input, self.g_act, self.train_phase)
 
 		### build discriminator
-		self.r_logits = self.build_dis(self.im_input, self.d_act)
-		self.g_logits = self.build_dis(self.g_layer, self.d_act, reuse=True)
+		self.r_logits = self.build_dis(self.im_input, self.d_act, self.train_phase)
+		self.g_logits = self.build_dis(self.g_layer, self.d_act, self.train_phase, reuse=True)
 
 		### build d losses
 		if self.d_loss_type == 'log':
-			self.d_r_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=self.r_logits, labels=tf.ones_like(self.r_logits, tf.float64)))
-			self.d_g_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=self.g_logits, labels=tf.zeros_like(self.g_logits, tf.float64)))
+			self.d_r_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=self.r_logits, labels=tf.ones_like(self.r_logits, tf_dtype)))
+			self.d_g_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=self.g_logits, labels=tf.zeros_like(self.g_logits, tf_dtype)))
 		elif self.d_loss_type == 'was':
 			self.d_r_loss = -tf.reduce_mean(self.r_logits)
 			self.d_g_loss = tf.reduce_mean(self.g_logits)
@@ -77,9 +93,9 @@ class TFBabyGAN:
 
 		### build g loss
 		if self.g_loss_type == 'log':
-			self.g_loss = -tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=self.g_logits, labels=tf.zeros_like(self.g_logits, tf.float64)))
+			self.g_loss = -tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=self.g_logits, labels=tf.zeros_like(self.g_logits, tf_dtype)))
 		elif self.g_loss_type == 'mod':
-			self.g_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=self.g_logits, labels=tf.ones_like(self.g_logits, tf.float64)))
+			self.g_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=self.g_logits, labels=tf.ones_like(self.g_logits, tf_dtype)))
 		elif self.g_loss_type == 'was':
 			self.g_loss = -tf.reduce_mean(self.g_logits)
 		else:
@@ -97,24 +113,32 @@ class TFBabyGAN:
 		g_logits_diff = tf.sqrt(tf.reduce_mean(tf.square(tf.gradients(self.g_loss, self.g_logits))))
 		g_out_diff = tf.sqrt(tf.reduce_mean(tf.square(tf.gradients(self.g_loss, self.g_layer))))
 		
-		diff = tf.zeros((1,), tf.float64)
+		diff = tf.zeros((1,), tf_dtype)
 		for v in self.d_vars:
+			if 'bn_' in v.name:
+				continue
 			diff = diff + tf.sqrt(tf.reduce_mean(tf.square(tf.gradients(self.d_r_loss, v))))
 		d_r_param_diff = 1.0 * diff / len(self.d_vars)
 
-		diff = tf.zeros((1,), tf.float64)
+		diff = tf.zeros((1,), tf_dtype)
 		for v in self.d_vars:
+			if 'bn_' in v.name:
+				continue
 			diff = diff + tf.sqrt(tf.reduce_mean(tf.square(tf.gradients(self.d_g_loss, v))))
 		d_g_param_diff = 1.0 * diff / len(self.d_vars)
 
-		diff = tf.zeros((1,), tf.float64)
+		diff = tf.zeros((1,), tf_dtype)
 		for v in self.g_vars:
+			if 'bn_' in v.name:
+				continue
 			diff = diff + tf.sqrt(tf.reduce_mean(tf.square(tf.gradients(self.g_loss, v))))
 		g_param_diff = 1.0 * diff / len(self.g_vars)
 
 		### build optimizers
-		self.g_opt = tf.train.AdamOptimizer(self.g_lr, beta1=self.g_beta, beta2=self.g_beta).minimize(self.g_loss, var_list=self.g_vars)
-		self.d_opt = tf.train.AdamOptimizer(self.d_lr, beta1=self.d_beta, beta2=self.d_beta).minimize(self.d_loss, var_list=self.d_vars)
+		update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
+		with tf.control_dependencies(update_ops):
+			self.g_opt = tf.train.AdamOptimizer(self.g_lr, beta1=self.g_beta, beta2=self.g_beta).minimize(self.g_loss, var_list=self.g_vars)
+			self.d_opt = tf.train.AdamOptimizer(self.d_lr, beta1=self.d_beta, beta2=self.d_beta).minimize(self.d_loss, var_list=self.d_vars)
 
 		### summaries
 		self.d_r_logs = [self.d_r_loss, r_logits_mean, d_r_logits_diff, d_r_param_diff]
@@ -122,30 +146,31 @@ class TFBabyGAN:
 		self.g_logs = [self.g_loss, g_logits_diff, g_out_diff, g_param_diff]
 		
 
-	def build_gen(self, z, act):
+	def build_gen(self, z, act, train_phase):
 		h1_size = 128
 		h2_size = 128
 		with tf.variable_scope('g_net'):
-			h1 = linear(z, h1_size, scope='fc1')
+			#h1 = linear(z, h1_size, scope='fc1')
+			h1 = dense(z, h1_size, scope='fc1')
 			h1 = act(h1)
 
-			h2 = linear(h1, h2_size, scope='fc2')
+			h2 = dense(h1, h2_size, scope='fc2')
 			h2 = act(h2)
 
-			o = linear(h2, self.data_dim, scope='fco')
+			o = dense(h2, self.data_dim, scope='fco')
 			return o
 
-	def build_dis(self, data_layer, act, reuse=False):
+	def build_dis(self, data_layer, act, train_phase, reuse=False):
 		h1_size = 128
 		h2_size = 128
-		with tf.variable_scope('d_net', reuse=reuse):
-			h1 = linear(data_layer, h1_size, scope='fc1')
+		with tf.variable_scope('d_net'):
+			h1 = dense(data_layer, h1_size, scope='fc1', reuse=reuse)
 			h1 = act(h1)
 
-			h2 = linear(h1, h2_size, scope='fc2')
+			h2 = dense_batch(h1, h2_size, scope='fc2', reuse=reuse, phase=train_phase)
 			h2 = act(h2)
 
-			o = linear(h2, 1, scope='fco')
+			o = dense(h2, 1, scope='fco', reuse=reuse)
 			return o
 
 	def start_session(self):
@@ -165,23 +190,26 @@ class TFBabyGAN:
 		self.saver.restore(self.sess, fname)
 
 	def step(self, batch_data, batch_size, gen_update=False, dis_only=False, gen_only=False):
+		batch_data = batch_data.astype(np_dtype) if batch_data is not None else None
+
 		### only forward discriminator on batch_data
 		if dis_only:
-			feed_dict = {self.im_input: batch_data}
+			feed_dict = {self.im_input: batch_data, self.train_phase: False}
 			u_logits = self.sess.run(self.r_logits, feed_dict=feed_dict)
 			return u_logits.flatten()
 
 		### sample z from uniform (-1,1)
 		z_data = np.random.uniform(low=-self.z_range, high=self.z_range, size=(batch_size, self.z_dim))
+		z_data = z_data.astype(np_dtype)
 
 		### only forward generator on z
 		if gen_only:
-			feed_dict = {self.z_input: z_data}
+			feed_dict = {self.z_input: z_data, self.train_phase: False}
 			g_layer = self.sess.run(self.g_layer, feed_dict=feed_dict)
 			return g_layer
 
 		### run one training step on discriminator, otherwise on generator, and log
-		feed_dict = {self.im_input:batch_data, self.z_input: z_data}
+		feed_dict = {self.im_input:batch_data, self.z_input: z_data, self.train_phase: True}
 		if not gen_update:
 			res_list = [self.g_layer, self.g_logs, self.d_r_logs, self.d_g_logs, self.d_opt]
 			res_list = self.sess.run(res_list, feed_dict=feed_dict)
