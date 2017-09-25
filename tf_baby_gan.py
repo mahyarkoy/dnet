@@ -82,22 +82,22 @@ class TFBabyGAN:
 
 		### build d losses
 		if self.d_loss_type == 'log':
-			self.d_r_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=self.r_logits, labels=tf.ones_like(self.r_logits, tf_dtype)))
-			self.d_g_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=self.g_logits, labels=tf.zeros_like(self.g_logits, tf_dtype)))
+			self.d_r_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=self.r_logits, labels=tf.ones_like(self.r_logits, tf_dtype)), axis=None)
+			self.d_g_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=self.g_logits, labels=tf.zeros_like(self.g_logits, tf_dtype)), axis=None)
 		elif self.d_loss_type == 'was':
-			self.d_r_loss = -tf.reduce_mean(self.r_logits)
-			self.d_g_loss = tf.reduce_mean(self.g_logits)
+			self.d_r_loss = -tf.reduce_mean(self.r_logits, axis=None)
+			self.d_g_loss = tf.reduce_mean(self.g_logits, axis=None)
 		else:
 			raise ValueError('>>> d_loss_type: %s is not defined!' % self.d_loss_type)
 		self.d_loss = self.d_r_loss + self.d_g_loss
 
 		### build g loss
 		if self.g_loss_type == 'log':
-			self.g_loss = -tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=self.g_logits, labels=tf.zeros_like(self.g_logits, tf_dtype)))
+			self.g_loss = -tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=self.g_logits, labels=tf.zeros_like(self.g_logits, tf_dtype)), axis=None)
 		elif self.g_loss_type == 'mod':
-			self.g_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=self.g_logits, labels=tf.ones_like(self.g_logits, tf_dtype)))
+			self.g_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=self.g_logits, labels=tf.ones_like(self.g_logits, tf_dtype)), axis=None)
 		elif self.g_loss_type == 'was':
-			self.g_loss = -tf.reduce_mean(self.g_logits)
+			self.g_loss = -tf.reduce_mean(self.g_logits, axis=None)
 		else:
 			raise ValueError('>>> g_loss_type: %s is not defined!' % self.g_loss_type)
 
@@ -106,32 +106,32 @@ class TFBabyGAN:
 		self.d_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, "d_net")
 
 		### logs
-		r_logits_mean = tf.reduce_mean(self.r_logits)
-		g_logits_mean = tf.reduce_mean(self.g_logits)
-		d_r_logits_diff = tf.sqrt(tf.reduce_mean(tf.square(tf.gradients(self.d_r_loss, self.r_logits))))
-		d_g_logits_diff = tf.sqrt(tf.reduce_mean(tf.square(tf.gradients(self.d_g_loss, self.g_logits))))
-		g_logits_diff = tf.sqrt(tf.reduce_mean(tf.square(tf.gradients(self.g_loss, self.g_logits))))
-		g_out_diff = tf.sqrt(tf.reduce_mean(tf.square(tf.gradients(self.g_loss, self.g_layer))))
+		r_logits_mean = tf.reduce_mean(self.r_logits, axis=None)
+		g_logits_mean = tf.reduce_mean(self.g_logits, axis=None)
+		d_r_logits_diff = tf.sqrt(tf.reduce_mean(tf.square(tf.gradients(self.d_r_loss, self.r_logits)), axis=None))
+		d_g_logits_diff = tf.sqrt(tf.reduce_mean(tf.square(tf.gradients(self.d_g_loss, self.g_logits)), axis=None))
+		g_logits_diff = tf.sqrt(tf.reduce_mean(tf.square(tf.gradients(self.g_loss, self.g_logits)), axis=None))
+		g_out_diff = tf.sqrt(tf.reduce_mean(tf.square(tf.gradients(self.g_loss, self.g_layer)), axis=None))
 		
 		diff = tf.zeros((1,), tf_dtype)
 		for v in self.d_vars:
 			if 'bn_' in v.name:
 				continue
-			diff = diff + tf.sqrt(tf.reduce_mean(tf.square(tf.gradients(self.d_r_loss, v))))
+			diff = diff + tf.sqrt(tf.reduce_mean(tf.square(tf.gradients(self.d_r_loss, v)), axis=None))
 		d_r_param_diff = 1.0 * diff / len(self.d_vars)
 
 		diff = tf.zeros((1,), tf_dtype)
 		for v in self.d_vars:
 			if 'bn_' in v.name:
 				continue
-			diff = diff + tf.sqrt(tf.reduce_mean(tf.square(tf.gradients(self.d_g_loss, v))))
+			diff = diff + tf.sqrt(tf.reduce_mean(tf.square(tf.gradients(self.d_g_loss, v)), axis=None))
 		d_g_param_diff = 1.0 * diff / len(self.d_vars)
 
 		diff = tf.zeros((1,), tf_dtype)
 		for v in self.g_vars:
 			if 'bn_' in v.name:
 				continue
-			diff = diff + tf.sqrt(tf.reduce_mean(tf.square(tf.gradients(self.g_loss, v))))
+			diff = diff + tf.sqrt(tf.reduce_mean(tf.square(tf.gradients(self.g_loss, v)), axis=None))
 		g_param_diff = 1.0 * diff / len(self.g_vars)
 
 		### build optimizers
