@@ -38,6 +38,8 @@ def dense_batch(x, h_size, scope, phase, reuse=False):
 def dense(x, h_size, scope, reuse=False):
     with tf.variable_scope(scope, reuse=reuse):
         h1 = tf.contrib.layers.fully_connected(x, h_size, activation_fn=None, scope='dense')
+        #h1 = tf.contrib.layers.fully_connected(x, h_size, activation_fn=None, scope='dense', weights_initializer=tf.truncated_normal_initializer(stddev=0.02))
+        #h1 = tf.contrib.layers.fully_connected(x, h_size, activation_fn=None, scope='dense', weights_initializer=tf.contrib.layers.xavier_initializer(uniform=True))
     return h1
 
 class TFBabyGAN:
@@ -101,6 +103,9 @@ class TFBabyGAN:
 		else:
 			raise ValueError('>>> g_loss_type: %s is not defined!' % self.g_loss_type)
 
+		### mean matching
+		mm_loss = tf.reduce_mean(tf.square(tf.reduce_mean(self.g_layer, axis=0) - tf.reduce_mean(self.im_input, axis=0)), axis=None)
+
 		### collect params
 		self.g_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, "g_net")
 		self.d_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, "d_net")
@@ -137,7 +142,7 @@ class TFBabyGAN:
 		### build optimizers
 		update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
 		with tf.control_dependencies(update_ops):
-			self.g_opt = tf.train.AdamOptimizer(self.g_lr, beta1=self.g_beta, beta2=self.g_beta).minimize(self.g_loss, var_list=self.g_vars)
+			self.g_opt = tf.train.AdamOptimizer(self.g_lr, beta1=self.g_beta, beta2=self.g_beta).minimize(self.g_loss+mm_loss, var_list=self.g_vars)
 			self.d_opt = tf.train.AdamOptimizer(self.d_lr, beta1=self.d_beta, beta2=self.d_beta).minimize(self.d_loss, var_list=self.d_vars)
 
 		### summaries
@@ -167,7 +172,8 @@ class TFBabyGAN:
 			h1 = dense(data_layer, h1_size, scope='fc1', reuse=reuse)
 			h1 = act(h1)
 
-			h2 = dense_batch(h1, h2_size, scope='fc2', reuse=reuse, phase=train_phase)
+			#h2 = dense_batch(h1, h2_size, scope='fc2', reuse=reuse, phase=train_phase)
+			h2 = dense(h1, h2_size, scope='fc2', reuse=reuse)
 			h2 = act(h2)
 
 			o = dense(h2, 1, scope='fco', reuse=reuse)
