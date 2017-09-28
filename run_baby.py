@@ -35,23 +35,29 @@ log_path_snap = log_path+'/snapshots'
 os.system('mkdir -p '+log_path_png)
 os.system('mkdir -p '+log_path_snap)
 
-def generate_normal_data(sample_size, centers, stds, labels=None):
+def generate_normal_data(sample_size, centers, stds, sample_ratio=None, labels=None):
+	### TODO: handle excessive samples randomly
 	num_class = len(centers)
 	num_dim = len(centers[0])
-	class_size = sample_size / num_class
 	### initialize datasets and labels
 	dataset = np.empty((sample_size, num_dim))
 	gt = np.empty(sample_size)
-	if not labels:
+	if labels is None:
 		labels = np.zeros(num_class)
-	n = 0
-	for c, v, l in zip(centers, stds, labels):
+	if sample_ratio is None:
+		sample_ratio = np.ones(num_class)
+	sample_ratio_array = 1.0 * np.array(sample_ratio) / np.sum(sample_ratio)
+	samples_per_class = np.floor(sample_ratio_array * sample_size)
+	samples_per_class[-1] += sample_size - np.sum(samples_per_class)
+	start = 0
+	for c, v, s, l in zip(centers, stds, samples_per_class, labels):
+		class_size = int(s)
 		data = np.random.multivariate_normal(c, np.diag(v), size=class_size)
 		labels = l*np.ones(class_size)
 		### storing into datasets and labels
-		dataset[n*class_size:(n+1)*class_size, ...] = data
-		gt[n*class_size:(n+1)*class_size] = labels
-		n += 1
+		dataset[start:start+class_size, ...] = data
+		gt[start:start+class_size] = labels
+		start += class_size
 	### shuffle data
 	order = np.arange(sample_size)
 	np.random.shuffle(order)
@@ -211,7 +217,7 @@ def plot_time_mat(mat, mat_names, fignum, save_path, ytype=None):
 '''
 Training Baby GAN
 '''
-def train_baby_gan(baby, centers, stds):
+def train_baby_gan(baby, centers, stds, ratios=None):
 	### dataset definition
 	data_dim = len(centers[0])
 	train_size = 51200
@@ -246,7 +252,7 @@ def train_baby_gan(baby, centers, stds):
 	while g_itr < g_max_itr:
 		#np.random.shuffle(train_dataset)
 		train_dataset, train_gt = \
-			generate_normal_data(train_size, centers, stds)
+			generate_normal_data(train_size, centers, stds, ratios)
 		
 		for batch_start in range(0, train_size, batch_size):
 			if g_itr >= g_max_itr:
@@ -288,7 +294,7 @@ def train_baby_gan(baby, centers, stds):
 			if d_itr % d_updates == 0:
 				for gn in range(g_updates):
 					### evaluate energy distance between real and gen distributions
-					e_dist, e_norm = eval_baby_gan(baby, centers, stds)
+					e_dist, e_norm = eval_baby_gan(baby, centers, stds, ratios)
 					e_dist = 0 if e_dist < 0 else np.sqrt(e_dist)
 					eval_logs.append([e_dist, e_dist/np.sqrt(2.0*e_norm)])
 
@@ -334,11 +340,11 @@ def train_baby_gan(baby, centers, stds):
 	plot_time_mat(d_g_logs_mat, d_g_logs_names, 1, log_path)
 	plot_time_mat(eval_logs_mat, eval_logs_names, 1, log_path)
 
-def eval_baby_gan(baby, centers, stds):
+def eval_baby_gan(baby, centers, stds, ratios=None):
 	### dataset definition
 	data_dim = len(centers[0])
 	sample_size = 10000
-	r_samples, gt = generate_normal_data(sample_size, centers, stds)
+	r_samples, gt = generate_normal_data(sample_size, centers, stds, ratios)
 	g_samples = baby.step(None, sample_size, gen_only=True)
 	if data_dim > 1:
 		rr_score = np.mean(np.sqrt(np.sum(np.square(r_samples[0:sample_size//2, ...] - r_samples[sample_size//2:, ...]), axis=1)))
@@ -354,11 +360,12 @@ def eval_baby_gan(baby, centers, stds):
 if __name__ == '__main__':
 	centers = [[-1.0, 0.0], [1.0, 0.0], [0.0, 1.0], [0.0, -1.0]]
 	stds = [[0.02, 0.02], [0.02, 0.02], [0.02, 0.02], [0.02, 0.02]]
+	ratios = [0.2, 0.2, 0.4, 0.2]
 	data_dim = len(centers[0])
 	#baby = baby_gan.BabyGAN(data_dim)
 	baby = tf_baby_gan.TFBabyGAN(data_dim)
 
-	train_baby_gan(baby, centers, stds)
+	train_baby_gan(baby, centers, stds, ratios)
 
 	e_dist, e_norm = eval_baby_gan(baby, centers, stds)
 	with open(log_path+'/txt_logs.txt', 'w+') as fs:
