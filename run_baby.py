@@ -224,13 +224,13 @@ def train_baby_gan(baby, centers, stds, ratios=None):
 
 	### drawing configs
 	fov = 4 ## field of view in field plot
-	d_draw = 1
+	d_draw = 0
 	g_draw = 1
 	field_sample_size = 100
 
 	### baby gan training configs
 	epochs = 100
-	d_updates = 1
+	d_updates = 5
 	g_updates = 1
 	batch_size = 512
 
@@ -331,7 +331,7 @@ def train_baby_gan(baby, centers, stds, ratios=None):
 	d_g_logs_mat = np.array(d_g_logs)
 	eval_logs_mat = np.array(eval_logs)
 	g_logs_names = ['g_loss', 'g_logit_diff', 'g_out_diff', 'g_param_diff']
-	d_r_logs_names = ['d_r_loss', 'r_logit_data', 'd_r_logit_diff', 'd_r_param_diff']
+	d_r_logs_names = ['d_loss', 'd_param_diff', 'd_r_loss', 'r_logit_data', 'd_r_logit_diff', 'd_r_param_diff']
 	d_g_logs_names = ['d_g_loss', 'g_logit_data', 'd_g_logit_diff', 'd_g_param_diff']
 	eval_logs_names = ['energy_distance', 'energy_distance_norm']
 
@@ -360,7 +360,8 @@ def eval_baby_gan(baby, centers, stds, ratios=None):
 if __name__ == '__main__':
 	centers = [[-1.0, 0.0], [1.0, 0.0], [0.0, 1.0], [0.0, -1.0]]
 	stds = [[0.02, 0.02], [0.02, 0.02], [0.02, 0.02], [0.02, 0.02]]
-	ratios = [0.2, 0.2, 0.4, 0.2]
+	#ratios = [0.2, 0.2, 0.4, 0.2]
+	ratios = None
 	data_dim = len(centers[0])
 	#baby = baby_gan.BabyGAN(data_dim)
 	baby = tf_baby_gan.TFBabyGAN(data_dim)

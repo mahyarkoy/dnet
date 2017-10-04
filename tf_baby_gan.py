@@ -47,16 +47,20 @@ class TFBabyGAN:
 
 		# s_data must have zero pads at the end to represent gen class, columns are features
 		self.g_lr = 1e-4
-		self.g_beta = 0.5
+		self.g_beta1 = 0.5
+		self.g_beta2 = 0.5
 		self.d_lr = 1e-4
-		self.d_beta = 0.5
+		self.d_beta1 = 0.5
+		self.d_beta2 = 0.5
 
 		### network parameters
 		self.z_dim = 256
 		self.z_range = 1.0
 		self.data_dim = data_dim
-		self.d_loss_type = 'log'
-		self.g_loss_type = 'mod'
+		self.mm_loss_weight = 0.0
+		self.gp_loss_weight = 10.0
+		self.d_loss_type = 'was'
+		self.g_loss_type = 'was'
 		self.d_act = tf.tanh
 		self.g_act = tf.tanh
 		#self.d_act = lrelu
@@ -73,6 +77,7 @@ class TFBabyGAN:
 		### define placeholders for image and label inputs
 		self.im_input = tf.placeholder(tf_dtype, [None, self.data_dim], name='im_input')
 		self.z_input = tf.placeholder(tf_dtype, [None, self.z_dim], name='z_input')
+		self.e_input = tf.placeholder(tf_dtype, [None, 1], name='e_input')
 		self.train_phase = tf.placeholder(tf.bool, name='phase')
 
 		### build generator
@@ -86,12 +91,16 @@ class TFBabyGAN:
 		if self.d_loss_type == 'log':
 			self.d_r_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=self.r_logits, labels=tf.ones_like(self.r_logits, tf_dtype)), axis=None)
 			self.d_g_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=self.g_logits, labels=tf.zeros_like(self.g_logits, tf_dtype)), axis=None)
+			self.d_loss = self.d_r_loss + self.d_g_loss
 		elif self.d_loss_type == 'was':
 			self.d_r_loss = -tf.reduce_mean(self.r_logits, axis=None)
 			self.d_g_loss = tf.reduce_mean(self.g_logits, axis=None)
+			rg_layer = (1.0 - self.e_input) * self.g_layer + self.e_input * self.im_input
+			rg_logits = self.build_dis(rg_layer, self.d_act, self.train_phase, reuse=True)
+			gp_loss = tf.reduce_mean(tf.square(tf.sqrt(tf.reduce_sum(tf.square(tf.gradients(rg_logits, rg_layer)), axis=1)) - 1.0), axis=None)
+			self.d_loss = self.d_r_loss + self.d_g_loss + self.gp_loss_weight * gp_loss
 		else:
 			raise ValueError('>>> d_loss_type: %s is not defined!' % self.d_loss_type)
-		self.d_loss = self.d_r_loss + self.d_g_loss
 
 		### build g loss
 		if self.g_loss_type == 'log':
@@ -105,6 +114,7 @@ class TFBabyGAN:
 
 		### mean matching
 		mm_loss = tf.reduce_mean(tf.square(tf.reduce_mean(self.g_layer, axis=0) - tf.reduce_mean(self.im_input, axis=0)), axis=None)
+		self.g_loss = self.g_loss + self.mm_loss_weight * mm_loss
 
 		### collect params
 		self.g_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, "g_net")
@@ -133,6 +143,13 @@ class TFBabyGAN:
 		d_g_param_diff = 1.0 * diff / len(self.d_vars)
 
 		diff = tf.zeros((1,), tf_dtype)
+		for v in self.d_vars:
+			if 'bn_' in v.name:
+				continue
+			diff = diff + tf.sqrt(tf.reduce_mean(tf.square(tf.gradients(self.d_loss, v)), axis=None))
+		d_param_diff = 1.0 * diff / len(self.d_vars)
+
+		diff = tf.zeros((1,), tf_dtype)
 		for v in self.g_vars:
 			if 'bn_' in v.name:
 				continue
@@ -142,11 +159,11 @@ class TFBabyGAN:
 		### build optimizers
 		update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
 		with tf.control_dependencies(update_ops):
-			self.g_opt = tf.train.AdamOptimizer(self.g_lr, beta1=self.g_beta, beta2=self.g_beta).minimize(self.g_loss+mm_loss, var_list=self.g_vars)
-			self.d_opt = tf.train.AdamOptimizer(self.d_lr, beta1=self.d_beta, beta2=self.d_beta).minimize(self.d_loss, var_list=self.d_vars)
+			self.g_opt = tf.train.AdamOptimizer(self.g_lr, beta1=self.g_beta1, beta2=self.g_beta2).minimize(self.g_loss, var_list=self.g_vars)
+			self.d_opt = tf.train.AdamOptimizer(self.d_lr, beta1=self.d_beta1, beta2=self.d_beta2).minimize(self.d_loss, var_list=self.d_vars)
 
 		### summaries
-		self.d_r_logs = [self.d_r_loss, r_logits_mean, d_r_logits_diff, d_r_param_diff]
+		self.d_r_logs = [self.d_loss, d_param_diff, self.d_r_loss, r_logits_mean, d_r_logits_diff, d_r_param_diff]
 		self.d_g_logs = [self.d_g_loss, g_logits_mean, d_g_logits_diff, d_g_param_diff]
 		self.g_logs = [self.g_loss, g_logits_diff, g_out_diff, g_param_diff]
 		
@@ -197,10 +214,14 @@ class TFBabyGAN:
 
 	def step(self, batch_data, batch_size, gen_update=False, dis_only=False, gen_only=False):
 		batch_data = batch_data.astype(np_dtype) if batch_data is not None else None
+		
+		### sample e from uniform (-1,1): for gp penalty in WGAN
+		e_data = np.random.uniform(low=0.0, high=1.0, size=(batch_size, 1))
+		e_data = e_data.astype(np_dtype)
 
 		### only forward discriminator on batch_data
 		if dis_only:
-			feed_dict = {self.im_input: batch_data, self.train_phase: False}
+			feed_dict = {self.im_input: batch_data, self.e_input: e_data, self.train_phase: False}
 			u_logits = self.sess.run(self.r_logits, feed_dict=feed_dict)
 			return u_logits.flatten()
 
@@ -215,7 +236,7 @@ class TFBabyGAN:
 			return g_layer
 
 		### run one training step on discriminator, otherwise on generator, and log
-		feed_dict = {self.im_input:batch_data, self.z_input: z_data, self.train_phase: True}
+		feed_dict = {self.im_input:batch_data, self.z_input: z_data, self.e_input: e_data, self.train_phase: True}
 		if not gen_update:
 			res_list = [self.g_layer, self.g_logs, self.d_r_logs, self.d_g_logs, self.d_opt]
 			res_list = self.sess.run(res_list, feed_dict=feed_dict)
