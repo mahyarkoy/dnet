@@ -2,10 +2,10 @@ import numpy as np
 import tensorflow as tf
 import os
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID" # so the IDs match nvidia-smi
-os.environ["CUDA_VISIBLE_DEVICES"] = "1" # "0, 1" for multiple
+os.environ["CUDA_VISIBLE_DEVICES"] = "3" # "0, 1" for multiple
 
-np.random.seed(0)
-tf.set_random_seed(0)
+np.random.seed(13)
+tf.set_random_seed(13)
 
 tf_dtype = tf.float32
 np_dtype = 'float32'
@@ -59,12 +59,12 @@ class TFBabyGAN:
 		self.data_dim = data_dim
 		self.mm_loss_weight = 0.0
 		self.gp_loss_weight = 10.0
-		self.d_loss_type = 'was'
-		self.g_loss_type = 'was'
+		self.d_loss_type = 'log'
+		self.g_loss_type = 'mod'
+		#self.d_act = tf.tanh
+		#self.g_act = tf.tanh
 		self.d_act = tf.tanh
-		self.g_act = tf.tanh
-		#self.d_act = lrelu
-		#self.g_act = tf.nn.relu
+		self.g_act = lrelu
 
 		### init graph and session
 		self.build_graph()
@@ -171,6 +171,8 @@ class TFBabyGAN:
 	def build_gen(self, z, act, train_phase):
 		h1_size = 128
 		h2_size = 128
+		h3_size = 128
+		h4_size = 128
 		with tf.variable_scope('g_net'):
 			#h1 = linear(z, h1_size, scope='fc1')
 			h1 = dense(z, h1_size, scope='fc1')
@@ -179,12 +181,20 @@ class TFBabyGAN:
 			h2 = dense(h1, h2_size, scope='fc2')
 			h2 = act(h2)
 
+			#h3 = dense(h2, h3_size, scope='fc3')
+			#h3 = act(h3)
+
+			#h4 = dense(h3, h4_size, scope='fc4')
+			#h4 = act(h4)
+
 			o = dense(h2, self.data_dim, scope='fco')
 			return o
 
 	def build_dis(self, data_layer, act, train_phase, reuse=False):
 		h1_size = 128
 		h2_size = 128
+		h3_size = 128
+		h4_size = 128
 		with tf.variable_scope('d_net'):
 			h1 = dense(data_layer, h1_size, scope='fc1', reuse=reuse)
 			h1 = act(h1)
@@ -192,6 +202,12 @@ class TFBabyGAN:
 			#h2 = dense_batch(h1, h2_size, scope='fc2', reuse=reuse, phase=train_phase)
 			h2 = dense(h1, h2_size, scope='fc2', reuse=reuse)
 			h2 = act(h2)
+			
+			#h3 = dense(h2, h3_size, scope='fc3', reuse=reuse)
+			#h3 = act(h3)
+
+			#h4 = dense(h3, h4_size, scope='fc4', reuse=reuse)
+			#h4 = act(h4)
 
 			o = dense(h2, 1, scope='fco', reuse=reuse)
 			return o
@@ -227,6 +243,7 @@ class TFBabyGAN:
 
 		### sample z from uniform (-1,1)
 		z_data = np.random.uniform(low=-self.z_range, high=self.z_range, size=(batch_size, self.z_dim))
+		#z_data = np.random.normal(loc=0.0, scale=1.0, size=(batch_size, self.z_dim))
 		z_data = z_data.astype(np_dtype)
 
 		### only forward generator on z
