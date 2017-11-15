@@ -2,7 +2,7 @@ import numpy as np
 import tensorflow as tf
 import os
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID" # so the IDs match nvidia-smi
-os.environ["CUDA_VISIBLE_DEVICES"] = "3" # "0, 1" for multiple
+os.environ["CUDA_VISIBLE_DEVICES"] = "1" # "0, 1" for multiple
 
 np.random.seed(13)
 tf.set_random_seed(13)
@@ -54,17 +54,17 @@ class TFBabyGAN:
 		self.d_beta2 = 0.5
 
 		### network parameters
-		self.z_dim = 256
+		self.z_dim = 1 #256
 		self.z_range = 1.0
 		self.data_dim = data_dim
 		self.mm_loss_weight = 0.0
 		self.gp_loss_weight = 10.0
 		self.d_loss_type = 'log'
 		self.g_loss_type = 'mod'
-		#self.d_act = tf.tanh
-		#self.g_act = tf.tanh
 		self.d_act = tf.tanh
-		self.g_act = lrelu
+		self.g_act = tf.tanh
+		#self.d_act = tf.nn.relu
+		#self.g_act = lrelu
 
 		### init graph and session
 		self.build_graph()
@@ -228,7 +228,7 @@ class TFBabyGAN:
 	def load(self, fname):
 		self.saver.restore(self.sess, fname)
 
-	def step(self, batch_data, batch_size, gen_update=False, dis_only=False, gen_only=False):
+	def step(self, batch_data, batch_size, gen_update=False, dis_only=False, gen_only=False, z_data=None):
 		batch_data = batch_data.astype(np_dtype) if batch_data is not None else None
 		
 		### sample e from uniform (-1,1): for gp penalty in WGAN
@@ -242,8 +242,9 @@ class TFBabyGAN:
 			return u_logits.flatten()
 
 		### sample z from uniform (-1,1)
-		z_data = np.random.uniform(low=-self.z_range, high=self.z_range, size=(batch_size, self.z_dim))
-		#z_data = np.random.normal(loc=0.0, scale=1.0, size=(batch_size, self.z_dim))
+		if z_data is None:
+			z_data = np.random.uniform(low=-self.z_range, high=self.z_range, size=(batch_size, self.z_dim))
+			#z_data = np.random.normal(loc=0.0, scale=1.0, size=(batch_size, self.z_dim))
 		z_data = z_data.astype(np_dtype)
 
 		### only forward generator on z

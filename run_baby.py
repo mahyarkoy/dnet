@@ -32,8 +32,10 @@ args = arg_parser.parse_args()
 log_path = args.log_path
 log_path_png = log_path+'/fields'
 log_path_snap = log_path+'/snapshots'
+log_path_manifold = log_path+'/manifolds'
 os.system('mkdir -p '+log_path_png)
 os.system('mkdir -p '+log_path_snap)
+os.system('mkdir -p '+log_path_manifold)
 
 def generate_normal_data(sample_size, centers, stds, sample_ratio=None, labels=None):
 	### TODO: handle excessive samples randomly
@@ -73,6 +75,13 @@ def generate_struct_data(data_size, lb, ub, std):
 	dataset = np.c_[x,y]
 	return dataset, np.array(labels)
 
+def generate_circle_data(data_size):
+	z = np.random.uniform(0.0, 2*np.pi, data_size)
+	x = np.sin(z)
+	y = np.cos(z)
+	dataset = np.c_[x,y]
+	return dataset, np.ones(dataset.shape[0])
+
 def plot_dataset(dataset, gt, title='Dataset'):
 	### plot the dataset
 	plt.figure(1,figsize=(8,6))
@@ -88,6 +97,41 @@ def plot_dataset(dataset, gt, title='Dataset'):
 	plt.grid(True, which='both', linestyle='dotted')
 	#plt.savefig(log_path + 'train_dataset_plot' + '.pdf')
 	return ax
+
+'''
+Plots generator 2D output data versus hidden z
+'''
+def plot_manifold(baby, batch_size, fignum, save_path, title, fov=1.0):
+	z_range = baby.z_range
+	ZZ = np.linspace(-z_range, z_range, 200)
+	XX = np.zeros(ZZ.shape[0])
+	YY = np.zeros(ZZ.shape[0])
+	### calculate the generator data manifold
+	for batch_start in range(0, ZZ.shape[0], batch_size):
+		batch_end = batch_start + batch_size
+		batch_data = ZZ[batch_start:batch_end, ...]
+		gen_data = baby.step(None, batch_size, gen_only=True, 
+			z_data=batch_data.reshape(batch_data.shape[0], 1))
+		XX[batch_start:batch_end] = gen_data[:,0]
+		YY[batch_start:batch_end] = gen_data[:,1]
+
+	#XX = np.sin(2*np.pi*ZZ)
+	#YY = np.cos(2*np.pi*ZZ)
+	### plot the 3d manifold
+	fig = plt.figure(fignum, figsize=(6, 8))
+	fig.clf()
+	ax = fig.add_subplot(1, 1, 1, projection='3d')
+	ax.plot(XX, YY, ZZ, zdir='z', c='b', linewidth=3)
+	ax.set_xlim(-fov, fov)
+	ax.set_ylim(-fov, fov)
+	ax.set_zlim(-z_range, z_range)
+	### plot the 2d projections X and Y on Z
+	ax.plot(XX, np.zeros(XX.shape) + fov, ZZ, zdir='z', c='m')
+	ax.plot(np.zeros(XX.shape) - fov, YY, ZZ, zdir='z', c='g')
+	ax.plot(XX, YY, np.zeros(XX.shape) - z_range, zdir='z', c='r')
+	ax.grid(True, which='both', linestyle='dotted')
+	ax.set_title(title+'_generator_manifold')	
+	fig.savefig(save_path)
 
 def baby_gan_field_2d(baby, x_min, x_max, y_min, y_max, batch_size):
 	XX, YY = np.mgrid[x_min:x_max:80j, y_min:y_max:80j]
@@ -226,6 +270,7 @@ def train_baby_gan(baby, centers, stds, ratios=None):
 	fov = 4 ## field of view in field plot
 	d_draw = 0
 	g_draw = 1
+	g_manifold = 1
 	field_sample_size = 100
 
 	### baby gan training configs
@@ -254,7 +299,8 @@ def train_baby_gan(baby, centers, stds, ratios=None):
 	while g_itr < g_max_itr:
 		#np.random.shuffle(train_dataset)
 		train_dataset, train_gt = \
-			generate_normal_data(train_size, centers, stds, ratios)
+			generate_circle_data(train_size)
+		#	generate_normal_data(train_size, centers, stds, ratios)
 		
 		for batch_start in range(0, train_size, batch_size):
 			if g_itr >= g_max_itr:
@@ -308,15 +354,18 @@ def train_baby_gan(baby, centers, stds, ratios=None):
 					d_g_logs.append(logs[2])
 					if g_draw > 0 and g_itr % g_draw == 0:
 						if data_dim == 1:
-							if not field_params:
+							if field_params is None:
 								field_params = baby_gan_field_1d(baby, -fov, fov, batch_size*10)
 							plot_field_1d(field_params, (d_data, batch_data), (g_data, batch_g_data), 0,
 								log_path_png+'/field_%06d.png' % itr_total, 'GEN_%d_%d_%d' % (gn, g_itr, itr_total))
 						else:
-							if not field_params:
+							if field_params is None:
 								field_params = baby_gan_field_2d(baby, -fov, fov, -fov, fov, batch_size*10)
 							plot_field_2d(field_params, fov, (d_data, batch_data), (g_data, batch_g_data), 0,
 								log_path_png+'/field_%06d.png' % itr_total, 'GEN_%d_%d_%d' % (gn, g_itr, itr_total))
+					### draw manifold of generator data
+					if g_manifold > 0 and g_itr % g_manifold == 0:
+						plot_manifold(baby, 200, 0, log_path_manifold+'/manifold_%06d.png' % itr_total, 'GEN_%d_%d_%d' % (gn, g_itr, itr_total))
 					g_itr += 1
 					itr_total += 1
 					if g_itr >= g_max_itr:
@@ -346,7 +395,10 @@ def eval_baby_gan(baby, centers, stds, ratios=None):
 	### dataset definition
 	data_dim = len(centers[0])
 	sample_size = 10000
-	r_samples, gt = generate_normal_data(sample_size, centers, stds, ratios)
+	r_samples, gt = \
+		generate_circle_data(sample_size)
+		#generate_normal_data(sample_size, centers, stds, ratios)
+
 	g_samples = baby.step(None, sample_size, gen_only=True)
 	if data_dim > 1:
 		rr_score = np.mean(np.sqrt(np.sum(np.square(r_samples[0:sample_size//2, ...] - r_samples[sample_size//2:, ...]), axis=1)))
