@@ -299,8 +299,8 @@ def train_baby_gan(baby, centers, stds, ratios=None):
 	while g_itr < g_max_itr:
 		#np.random.shuffle(train_dataset)
 		train_dataset, train_gt = \
-			generate_circle_data(train_size)
-		#	generate_normal_data(train_size, centers, stds, ratios)
+		#	generate_circle_data(train_size)
+			generate_normal_data(train_size, centers, stds, ratios)
 		
 		for batch_start in range(0, train_size, batch_size):
 			if g_itr >= g_max_itr:
@@ -396,8 +396,8 @@ def eval_baby_gan(baby, centers, stds, ratios=None):
 	data_dim = len(centers[0])
 	sample_size = 10000
 	r_samples, gt = \
-		generate_circle_data(sample_size)
-		#generate_normal_data(sample_size, centers, stds, ratios)
+		#generate_circle_data(sample_size)
+		generate_normal_data(sample_size, centers, stds, ratios)
 
 	g_samples = baby.step(None, sample_size, gen_only=True)
 	if data_dim > 1:

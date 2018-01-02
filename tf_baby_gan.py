@@ -45,7 +45,7 @@ def dense(x, h_size, scope, reuse=False):
 class TFBabyGAN:
 	def __init__(self, data_dim):
 
-		# s_data must have zero pads at the end to represent gen class, columns are features
+		### optimization parameters
 		self.g_lr = 1e-4
 		self.g_beta1 = 0.5
 		self.g_beta2 = 0.5
@@ -54,7 +54,8 @@ class TFBabyGAN:
 		self.d_beta2 = 0.5
 
 		### network parameters
-		self.z_dim = 1 #256
+		self.z_dim = 100 #256
+		self.man_dim = 10
 		self.z_range = 1.0
 		self.data_dim = data_dim
 		self.mm_loss_weight = 0.0
@@ -63,7 +64,7 @@ class TFBabyGAN:
 		self.g_loss_type = 'mod'
 		self.d_act = tf.tanh
 		self.g_act = tf.tanh
-		#self.d_act = tf.nn.relu
+		#self.d_act = lrelu
 		#self.g_act = lrelu
 
 		### init graph and session
@@ -97,7 +98,15 @@ class TFBabyGAN:
 			self.d_g_loss = tf.reduce_mean(self.g_logits, axis=None)
 			rg_layer = (1.0 - self.e_input) * self.g_layer + self.e_input * self.im_input
 			rg_logits = self.build_dis(rg_layer, self.d_act, self.train_phase, reuse=True)
-			gp_loss = tf.reduce_mean(tf.square(tf.sqrt(tf.reduce_sum(tf.square(tf.gradients(rg_logits, rg_layer)), axis=1)) - 1.0), axis=None)
+			### NaN free norm gradient
+			rg_grad = tf.gradients(rg_logits, rg_layer)
+			rg_grad_flat = tf.reshape(rg_grad, [-1, np.prod(self.data_dim)])
+			rg_grad_ok = tf.reduce_sum(tf.square(rg_grad_flat), axis=1) > 0.
+			rg_grad_safe = tf.where(rg_grad_ok, rg_grad_flat, tf.ones_like(rg_grad_flat))
+			rg_grad_abs = tf.where(rg_grad_flat >= 0., rg_grad_flat, -rg_grad_flat)
+			rg_grad_norm = tf.where(rg_grad_ok, 
+				tf.norm(rg_grad_safe, axis=1), tf.reduce_sum(rg_grad_abs, axis=1))
+			gp_loss = tf.reduce_mean(tf.square(rg_grad_norm - 1.0))
 			self.d_loss = self.d_r_loss + self.d_g_loss + self.gp_loss_weight * gp_loss
 		else:
 			raise ValueError('>>> d_loss_type: %s is not defined!' % self.d_loss_type)
@@ -155,6 +164,21 @@ class TFBabyGAN:
 				continue
 			diff = diff + tf.sqrt(tf.reduce_mean(tf.square(tf.gradients(self.g_loss, v)), axis=None))
 		g_param_diff = 1.0 * diff / len(self.g_vars)
+
+		### compute stat of weights
+		self.nan_vars = 0.
+		self.inf_vars = 0.
+		self.zero_vars = 0.
+		self.count_vars = 0
+		for v in self.g_vars + self.d_vars:
+			self.nan_vars += tf.reduce_sum(tf.cast(tf.is_nan(v), tf_dtype))
+			self.inf_vars += tf.reduce_sum(tf.cast(tf.is_inf(v), tf_dtype))
+			self.zero_vars += tf.reduce_sum(tf.cast(tf.square(v) < 1e-6, tf_dtype))
+			self.count_vars += tf.reduce_prod(v.get_shape())
+		self.count_vars = tf.cast(self.count_vars, tf_dtype)
+		self.nan_vars /= self.count_vars 
+		self.inf_vars /= self.count_vars
+		self.zero_vars /= self.count_vars
 
 		### build optimizers
 		update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
@@ -229,8 +253,15 @@ class TFBabyGAN:
 		self.saver.restore(self.sess, fname)
 
 	def step(self, batch_data, batch_size, gen_update=False, dis_only=False, gen_only=False, z_data=None):
+		batch_size = batch_data.shape[0] if batch_data is not None else batch_size
 		batch_data = batch_data.astype(np_dtype) if batch_data is not None else None
 		
+		### inf nans and tiny vars stats
+		if stats_only:
+			res_list = [self.nan_vars, self.inf_vars, self.zero_vars, self.count_vars]
+			res_list = self.sess.run(res_list, feed_dict={})
+			return res_list
+
 		### sample e from uniform (-1,1): for gp penalty in WGAN
 		e_data = np.random.uniform(low=0.0, high=1.0, size=(batch_size, 1))
 		e_data = e_data.astype(np_dtype)
@@ -243,8 +274,15 @@ class TFBabyGAN:
 
 		### sample z from uniform (-1,1)
 		if z_data is None:
-			z_data = np.random.uniform(low=-self.z_range, high=self.z_range, size=(batch_size, self.z_dim))
+			z_data = np.random.uniform(low=-self.z_range, high=self.z_range, 
+				size=[batch_size, self.z_dim-self.man_dim])
 			#z_data = np.random.normal(loc=0.0, scale=1.0, size=(batch_size, self.z_dim))
+			if self.man_dim > 0:
+				### select manifold of each random point (1 hot)
+				man_id = np.random.choice(self.man_dim, batch_size)
+				z_man = np.zeros((batch_size, self.man_dim))
+				z_man[range(batch_size), man_id] = 1.
+				z_data = np.concatenate([z_data, z_man], axis=1)
 		z_data = z_data.astype(np_dtype)
 
 		### only forward generator on z
