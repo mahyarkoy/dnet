@@ -1,5 +1,7 @@
 *log
 *logs
+logs*
+log*
 baby_log*
 *.pyc
 snapshots

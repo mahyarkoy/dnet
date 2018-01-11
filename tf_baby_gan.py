@@ -1,11 +1,6 @@
 import numpy as np
 import tensorflow as tf
 import os
-os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID" # so the IDs match nvidia-smi
-os.environ["CUDA_VISIBLE_DEVICES"] = "1" # "0, 1" for multiple
-
-np.random.seed(13)
-tf.set_random_seed(13)
 
 tf_dtype = tf.float32
 np_dtype = 'float32'
@@ -43,36 +38,34 @@ def dense(x, h_size, scope, reuse=False):
     return h1
 
 class TFBabyGAN:
-	def __init__(self, data_dim):
+	def __init__(self, sess, data_dim):
+		self.sess = sess
 
 		### optimization parameters
-		self.g_lr = 1e-4
+		self.g_lr = 2e-4
 		self.g_beta1 = 0.5
 		self.g_beta2 = 0.5
-		self.d_lr = 1e-4
+		self.d_lr = 2e-4
 		self.d_beta1 = 0.5
 		self.d_beta2 = 0.5
 
 		### network parameters
-		self.z_dim = 100 #256
-		self.man_dim = 10
+		self.z_dim = 100
+		self.man_dim = 0
 		self.z_range = 1.0
 		self.data_dim = data_dim
 		self.mm_loss_weight = 0.0
 		self.gp_loss_weight = 10.0
 		self.d_loss_type = 'log'
 		self.g_loss_type = 'mod'
-		self.d_act = tf.tanh
+		#self.d_act = tf.tanh
 		self.g_act = tf.tanh
-		#self.d_act = lrelu
+		self.d_act = lrelu
 		#self.g_act = lrelu
 
 		### init graph and session
 		self.build_graph()
 		self.start_session()
-
-	def __del__(self):
-		self.end_session()
 
 	def build_graph(self):
 		### define placeholders for image and label inputs
@@ -169,16 +162,19 @@ class TFBabyGAN:
 		self.nan_vars = 0.
 		self.inf_vars = 0.
 		self.zero_vars = 0.
+		self.big_vars = 0.
 		self.count_vars = 0
 		for v in self.g_vars + self.d_vars:
 			self.nan_vars += tf.reduce_sum(tf.cast(tf.is_nan(v), tf_dtype))
 			self.inf_vars += tf.reduce_sum(tf.cast(tf.is_inf(v), tf_dtype))
 			self.zero_vars += tf.reduce_sum(tf.cast(tf.square(v) < 1e-6, tf_dtype))
+			self.big_vars += tf.reduce_sum(tf.cast(tf.square(v) > 1e2, tf_dtype))
 			self.count_vars += tf.reduce_prod(v.get_shape())
 		self.count_vars = tf.cast(self.count_vars, tf_dtype)
 		self.nan_vars /= self.count_vars 
 		self.inf_vars /= self.count_vars
 		self.zero_vars /= self.count_vars
+		self.big_vars /= self.count_vars
 
 		### build optimizers
 		update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
@@ -189,8 +185,7 @@ class TFBabyGAN:
 		### summaries
 		self.d_r_logs = [self.d_loss, d_param_diff, self.d_r_loss, r_logits_mean, d_r_logits_diff, d_r_param_diff]
 		self.d_g_logs = [self.d_g_loss, g_logits_mean, d_g_logits_diff, d_g_param_diff]
-		self.g_logs = [self.g_loss, g_logits_diff, g_out_diff, g_param_diff]
-		
+		self.g_logs = [self.g_loss, g_logits_diff, g_out_diff, g_param_diff]	
 
 	def build_gen(self, z, act, train_phase):
 		h1_size = 128
@@ -237,14 +232,8 @@ class TFBabyGAN:
 			return o
 
 	def start_session(self):
-		gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.2)
-		config = tf.ConfigProto(allow_soft_placement=True, gpu_options=gpu_options)
-		self.saver = tf.train.Saver(tf.global_variables(), keep_checkpoint_every_n_hours=1)
-		self.sess = tf.Session(config=config)
-		self.sess.run(tf.global_variables_initializer())
-
-	def end_session(self):
-		self.sess.close()
+		self.saver = tf.train.Saver(tf.global_variables(), 
+			keep_checkpoint_every_n_hours=0.1, max_to_keep=10)
 
 	def save(self, fname):
 		self.saver.save(self.sess, fname)
@@ -252,23 +241,24 @@ class TFBabyGAN:
 	def load(self, fname):
 		self.saver.restore(self.sess, fname)
 
-	def step(self, batch_data, batch_size, gen_update=False, dis_only=False, gen_only=False, z_data=None):
+	def step(self, batch_data, batch_size, gen_update=False, 
+		dis_only=False, gen_only=False, stats_only=False, z_data=None):
 		batch_size = batch_data.shape[0] if batch_data is not None else batch_size
 		batch_data = batch_data.astype(np_dtype) if batch_data is not None else None
 		
-		### inf nans and tiny vars stats
+		### inf, nans, tiny and big vars stats
 		if stats_only:
-			res_list = [self.nan_vars, self.inf_vars, self.zero_vars, self.count_vars]
+			res_list = [self.nan_vars, self.inf_vars, self.zero_vars, self.big_vars, self.count_vars]
 			res_list = self.sess.run(res_list, feed_dict={})
 			return res_list
 
-		### sample e from uniform (-1,1): for gp penalty in WGAN
+		### sample e from uniform (0,1): for gp penalty in WGAN
 		e_data = np.random.uniform(low=0.0, high=1.0, size=(batch_size, 1))
 		e_data = e_data.astype(np_dtype)
 
 		### only forward discriminator on batch_data
 		if dis_only:
-			feed_dict = {self.im_input: batch_data, self.e_input: e_data, self.train_phase: False}
+			feed_dict = {self.im_input: batch_data, self.train_phase: False}
 			u_logits = self.sess.run(self.r_logits, feed_dict=feed_dict)
 			return u_logits.flatten()
 

@@ -1,12 +1,11 @@
 #!/bin/bash
 set -e
-fname=$1
+pfname=$1
 target=$2
-mkdir -p $fname/samples
+eval_step=100
+mkdir -p $pfname
 mkdir -p $target
-python run_baby.py -l $fname
-ffmpeg -framerate 60 -pattern_type glob -i $fname/fields/'*.png' -c:v libx264 -pix_fmt yuv420p $fname/baby_log.mp4
-ffmpeg -framerate 60 -pattern_type glob -i $fname/manifolds/'*.png' -c:v libx264 -pix_fmt yuv420p $fname/baby_manifold.mp4
+
 ### saving 10 sample fileds
 function sample_png {
 	dn=$1
@@ -24,12 +23,23 @@ function sample_png {
 		fi
 		let counter+=1
 	done
+	cp $f $2
 }
-sample_png $fname/fields $fname/samples 1000
-sample_png $fname/manifolds $fname/samples 1000
-### clearing the fields and copy to destination
-rm -r $fname/fields
-rm -r $fname/manifolds
-cp -r $fname $target
+
+for i in {0..4}
+do
+	fname=$pfname/run_$i
+	mkdir -p $fname/samples
+	python run_baby.py -l $fname -e $eval_step  -s $i
+	ffmpeg -framerate 30 -pattern_type glob -i $fname/fields/'*.png' -c:v libx264 -pix_fmt yuv420p $fname/baby_log.mp4
+	#ffmpeg -framerate 60 -pattern_type glob -i $fname/manifolds/'*.png' -c:v libx264 -pix_fmt yuv420p $fname/baby_manifold.mp4
+
+	sample_png $fname/fields $fname/samples 1000
+	#sample_png $fname/manifolds $fname/samples 100
+	### clearing the fields
+	rm -r $fname/fields
+	rm -r $fname/manifolds
+done
+cp -r $pfname $target
 #ffmpeg -framerate 60 -pattern_type glob -i $target/$fname/fields/'*.png' -c:v libx264 -pix_fmt yuv420p $target/$fname/baby_log.mp4
-rm -r $fname
+rm -r $pfname
