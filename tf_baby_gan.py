@@ -57,11 +57,16 @@ class TFBabyGAN:
 		self.mm_loss_weight = 0.0
 		self.gp_loss_weight = 10.0
 		self.d_loss_type = 'log'
-		self.g_loss_type = 'mod'
+		self.g_loss_type = 'was'
 		#self.d_act = tf.tanh
 		self.g_act = tf.tanh
 		self.d_act = lrelu
 		#self.g_act = lrelu
+
+		### consolidation params
+		self.con_loss_weight = 1.0
+		self.con_trace_size = 10
+		self.con_decay = 0.9
 
 		### init graph and session
 		self.build_graph()
@@ -114,13 +119,36 @@ class TFBabyGAN:
 		else:
 			raise ValueError('>>> g_loss_type: %s is not defined!' % self.g_loss_type)
 
-		### mean matching
-		mm_loss = tf.reduce_mean(tf.square(tf.reduce_mean(self.g_layer, axis=0) - tf.reduce_mean(self.im_input, axis=0)), axis=None)
-		self.g_loss = self.g_loss + self.mm_loss_weight * mm_loss
-
 		### collect params
 		self.g_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, "g_net")
 		self.d_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, "d_net")
+
+		### mean matching
+		mm_loss = tf.reduce_mean(tf.square(tf.reduce_mean(self.g_layer, axis=0) - tf.reduce_mean(self.im_input, axis=0)), axis=None)
+
+		### init con_g_ and con_info and create con_loss
+		con_loss = 0.0
+		con_mem_ops = list()
+		con_info_ops = list()
+		with tf.variable_scope('consolid'):
+			tc = tf.get_variable('trace_counter', [1], dtype=tf.int32, initializer=tf.constant_initializer(0))
+			trace_id = tc[0] % self.con_trace_size
+			for v in self.g_vars:
+				shape = v.get_shape().as_list()
+				v_mem = tf.get_variable(v.name[:-2], [self.con_trace_size] + shape, initializer=tf.constant_initializer(0.0))
+				v_info = tf.get_variable(v.name[:-2]+'_info', [self.con_trace_size] + shape, initializer=tf.constant_initializer(0.0))
+				con_loss += tf.reduce_sum(v_info * tf.square(v - v_mem), axis=None)
+
+				### ops tp update consolidation variables
+				info_decay = v_mem.assign(v_mem * self.con_decay)
+				with tf.control_dependencies([info_decay]):
+					con_mem_ops.append(v_mem[trace_id, ...].assign(v))
+					con_info_ops.append(v_info[trace_id, ...].assign(tf.square(tf.gradients(self.g_logits, v)[0])))
+
+			with tf.control_dependencies(con_mem_ops + con_info_ops):
+				self.con_trace_update = tc.assign_add([1])
+
+		self.g_loss = self.g_loss + self.mm_loss_weight * mm_loss + self.con_loss_weight * con_loss
 
 		### logs
 		r_logits_mean = tf.reduce_mean(self.r_logits, axis=None)
@@ -183,9 +211,9 @@ class TFBabyGAN:
 			self.d_opt = tf.train.AdamOptimizer(self.d_lr, beta1=self.d_beta1, beta2=self.d_beta2).minimize(self.d_loss, var_list=self.d_vars)
 
 		### summaries
-		self.d_r_logs = [self.d_loss, d_param_diff, self.d_r_loss, r_logits_mean, d_r_logits_diff, d_r_param_diff]
-		self.d_g_logs = [self.d_g_loss, g_logits_mean, d_g_logits_diff, d_g_param_diff]
-		self.g_logs = [self.g_loss, g_logits_diff, g_out_diff, g_param_diff]	
+		self.d_r_logs = [self.d_loss]#, d_param_diff, self.d_r_loss, r_logits_mean, d_r_logits_diff, d_r_param_diff]
+		self.d_g_logs = [self.d_g_loss]#, g_logits_mean, d_g_logits_diff, d_g_param_diff]
+		self.g_logs = [self.g_loss]#, g_logits_diff, g_out_diff, g_param_diff]	
 
 	def build_gen(self, z, act, train_phase):
 		h1_size = 128
@@ -289,5 +317,6 @@ class TFBabyGAN:
 		else:
 			res_list = [self.g_layer, self.g_logs, self.d_r_logs, self.d_g_logs, self.g_opt]
 			res_list = self.sess.run(res_list, feed_dict=feed_dict)
+			self.sess.run(self.con_trace_update, feed_dict=feed_dict)
 
 		return tuple(res_list[1:]), res_list[0]

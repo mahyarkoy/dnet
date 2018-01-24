@@ -26,7 +26,7 @@ function sample_png {
 	cp $f $2
 }
 
-for i in {0..4}
+for i in {0..2}
 do
 	fname=$pfname/run_$i
 	mkdir -p $fname/samples
