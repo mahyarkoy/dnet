@@ -50,6 +50,7 @@ class TFBabyGAN:
 		self.d_beta2 = 0.5
 
 		### network parameters
+		self.batch_size = 128
 		self.z_dim = 100
 		self.man_dim = 0
 		self.z_range = 1.0
@@ -59,12 +60,12 @@ class TFBabyGAN:
 		self.d_loss_type = 'log'
 		self.g_loss_type = 'was'
 		#self.d_act = tf.tanh
-		self.g_act = tf.tanh
+		#self.g_act = tf.tanh
 		self.d_act = lrelu
-		#self.g_act = lrelu
+		self.g_act = lrelu
 
 		### consolidation params
-		self.con_loss_weight = 1.0
+		self.con_loss_weight = 10.0
 		self.con_trace_size = 10
 		self.con_decay = 0.9
 
@@ -126,7 +127,7 @@ class TFBabyGAN:
 		### mean matching
 		mm_loss = tf.reduce_mean(tf.square(tf.reduce_mean(self.g_layer, axis=0) - tf.reduce_mean(self.im_input, axis=0)), axis=None)
 
-		### init con_g_ and con_info and create con_loss
+		###consolidatoin loss
 		con_loss = 0.0
 		con_mem_ops = list()
 		con_info_ops = list()
@@ -139,11 +140,22 @@ class TFBabyGAN:
 				v_info = tf.get_variable(v.name[:-2]+'_info', [self.con_trace_size] + shape, initializer=tf.constant_initializer(0.0))
 				con_loss += tf.reduce_sum(v_info * tf.square(v - v_mem), axis=None)
 
+				### batch separated gradients wrt weights: E_z[(grad_w D(x))^2]
+				flat_logits = tf.reshape(self.g_logits, [-1])
+				fl_size = tf.shape(flat_logits)[0]
+				fl_pad = tf.pad(flat_logits, [[0, self.batch_size - fl_size]], 'CONSTANT')
+				fl_prsq = tf.square(tf.sigmoid(fl_pad))
+				fl_diag = tf.diag(fl_pad)
+				fl_grads = 0.0
+				for i in range(self.batch_size):
+					fl_grads += fl_prsq[i] * tf.square(tf.gradients(fl_diag[i, ...], v)[0])
+				fl_grads = fl_grads / tf.cast(fl_size, tf_dtype)
+
 				### ops tp update consolidation variables
-				info_decay = v_mem.assign(v_mem * self.con_decay)
+				info_decay = v_info.assign(v_info * self.con_decay)
 				with tf.control_dependencies([info_decay]):
 					con_mem_ops.append(v_mem[trace_id, ...].assign(v))
-					con_info_ops.append(v_info[trace_id, ...].assign(tf.square(tf.gradients(self.g_logits, v)[0])))
+					con_info_ops.append(v_info[trace_id, ...].assign(fl_grads))
 
 			with tf.control_dependencies(con_mem_ops + con_info_ops):
 				self.con_trace_update = tc.assign_add([1])
@@ -196,7 +208,7 @@ class TFBabyGAN:
 			self.nan_vars += tf.reduce_sum(tf.cast(tf.is_nan(v), tf_dtype))
 			self.inf_vars += tf.reduce_sum(tf.cast(tf.is_inf(v), tf_dtype))
 			self.zero_vars += tf.reduce_sum(tf.cast(tf.square(v) < 1e-6, tf_dtype))
-			self.big_vars += tf.reduce_sum(tf.cast(tf.square(v) > 1e2, tf_dtype))
+			self.big_vars += tf.reduce_sum(tf.cast(tf.square(v) > 1.0, tf_dtype))
 			self.count_vars += tf.reduce_prod(v.get_shape())
 		self.count_vars = tf.cast(self.count_vars, tf_dtype)
 		self.nan_vars /= self.count_vars 
