@@ -1,6 +1,7 @@
 import numpy as np
 import tensorflow as tf
 import os
+import cPickle as pk
 
 tf_dtype = tf.float32
 np_dtype = 'float32'
@@ -42,30 +43,39 @@ class TFBabyGAN:
 		self.sess = sess
 
 		### optimization parameters
-		self.g_lr = 2e-4
-		self.g_beta1 = 0.5
-		self.g_beta2 = 0.5
+		self.g_lr = 1e-3
+		self.g_beta1 = 0.9
+		self.g_beta2 = 0.99
 		self.d_lr = 2e-4
-		self.d_beta1 = 0.5
-		self.d_beta2 = 0.5
+		self.d_beta1 = 0.9
+		self.d_beta2 = 0.99
+		self.pg_lr = 1e-2
+		self.pg_beta1 = 0.5
+		self.pg_beta2 = 0.5
 
 		### network parameters
 		self.batch_size = 128
 		self.z_dim = 100
 		self.man_dim = 0
+		self.g_num = 4
 		self.z_range = 1.0
 		self.data_dim = data_dim
 		self.mm_loss_weight = 0.0
 		self.gp_loss_weight = 10.0
+		self.en_loss_weight = 1.0
+		self.rl_lr = 0.99
+		self.pg_base_lr = 0.99
+		self.g_rl_vals = 0. * np.ones(self.g_num, dtype=np_dtype)
+		self.g_rl_pvals = 0. * np.ones(self.g_num, dtype=np_dtype)
 		self.d_loss_type = 'log'
-		self.g_loss_type = 'was'
+		self.g_loss_type = 'mod'
 		#self.d_act = tf.tanh
 		#self.g_act = tf.tanh
 		self.d_act = lrelu
-		self.g_act = lrelu
+		self.g_act = tf.nn.relu
 
 		### consolidation params
-		self.con_loss_weight = 10.0
+		self.con_loss_weight = 0.
 		self.con_trace_size = 10
 		self.con_decay = 0.9
 
@@ -76,7 +86,9 @@ class TFBabyGAN:
 	def build_graph(self):
 		### define placeholders for image and label inputs
 		self.im_input = tf.placeholder(tf_dtype, [None, self.data_dim], name='im_input')
-		self.z_input = tf.placeholder(tf_dtype, [None, self.z_dim], name='z_input')
+		#self.z_input = tf.placeholder(tf_dtype, [None, self.z_dim], name='z_input')
+		#self.z_input = tf.placeholder(tf_dtype, [None, self.g_num, self.data_dim], name='z_input')
+		self.z_input = tf.placeholder(tf.int32, [None], name='z_input')
 		self.e_input = tf.placeholder(tf_dtype, [None, 1], name='e_input')
 		self.train_phase = tf.placeholder(tf.bool, name='phase')
 
@@ -84,61 +96,91 @@ class TFBabyGAN:
 		self.g_layer = self.build_gen(self.z_input, self.g_act, self.train_phase)
 
 		### build discriminator
-		self.r_logits = self.build_dis(self.im_input, self.d_act, self.train_phase)
-		self.g_logits = self.build_dis(self.g_layer, self.d_act, self.train_phase, reuse=True)
+		self.r_logits, self.r_hidden = self.build_dis(self.im_input, self.d_act, self.train_phase)
+		self.g_logits, self.g_hidden = self.build_dis(self.g_layer, self.d_act, self.train_phase, reuse=True)
+		self.r_en_logits = self.build_encoder(self.r_hidden, self.d_act, self.train_phase)
+		self.g_en_logits = self.build_encoder(self.g_hidden, self.d_act, self.train_phase, reuse=True)
+
+		### real gen manifold interpolation
+		rg_layer = (1.0 - self.e_input) * self.g_layer + self.e_input * self.im_input
+		self.rg_logits, _ = self.build_dis(rg_layer, self.d_act, self.train_phase, reuse=True)
 
 		### build d losses
 		if self.d_loss_type == 'log':
-			self.d_r_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=self.r_logits, labels=tf.ones_like(self.r_logits, tf_dtype)), axis=None)
-			self.d_g_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=self.g_logits, labels=tf.zeros_like(self.g_logits, tf_dtype)), axis=None)
-			self.d_loss = self.d_r_loss + self.d_g_loss
+			self.d_r_loss = tf.nn.sigmoid_cross_entropy_with_logits(
+					logits=self.r_logits, labels=tf.ones_like(self.r_logits, tf_dtype))
+			self.d_g_loss = tf.nn.sigmoid_cross_entropy_with_logits(
+					logits=self.g_logits, labels=tf.zeros_like(self.g_logits, tf_dtype))
+			self.d_rg_loss = tf.nn.sigmoid_cross_entropy_with_logits(
+					logits=self.rg_logits, labels=tf.ones_like(self.rg_logits, tf_dtype))
 		elif self.d_loss_type == 'was':
-			self.d_r_loss = -tf.reduce_mean(self.r_logits, axis=None)
-			self.d_g_loss = tf.reduce_mean(self.g_logits, axis=None)
-			rg_layer = (1.0 - self.e_input) * self.g_layer + self.e_input * self.im_input
-			rg_logits = self.build_dis(rg_layer, self.d_act, self.train_phase, reuse=True)
-			### NaN free norm gradient
-			rg_grad = tf.gradients(rg_logits, rg_layer)
-			rg_grad_flat = tf.reshape(rg_grad, [-1, np.prod(self.data_dim)])
-			rg_grad_ok = tf.reduce_sum(tf.square(rg_grad_flat), axis=1) > 0.
-			rg_grad_safe = tf.where(rg_grad_ok, rg_grad_flat, tf.ones_like(rg_grad_flat))
-			rg_grad_abs = tf.where(rg_grad_flat >= 0., rg_grad_flat, -rg_grad_flat)
-			rg_grad_norm = tf.where(rg_grad_ok, 
-				tf.norm(rg_grad_safe, axis=1), tf.reduce_sum(rg_grad_abs, axis=1))
-			gp_loss = tf.reduce_mean(tf.square(rg_grad_norm - 1.0))
-			self.d_loss = self.d_r_loss + self.d_g_loss + self.gp_loss_weight * gp_loss
+			self.d_r_loss = -self.r_logits 
+			self.d_g_loss = self.g_logits
+			self.d_rg_loss = -self.rg_logits
 		else:
 			raise ValueError('>>> d_loss_type: %s is not defined!' % self.d_loss_type)
 
+		### gradient penalty
+		### NaN free norm gradient
+		rg_grad = tf.gradients(self.rg_logits, rg_layer)
+		rg_grad_flat = tf.reshape(rg_grad, [-1, np.prod(self.data_dim)])
+		rg_grad_ok = tf.reduce_sum(tf.square(rg_grad_flat), axis=1) > 0.
+		rg_grad_safe = tf.where(rg_grad_ok, rg_grad_flat, tf.ones_like(rg_grad_flat))
+		rg_grad_abs = tf.where(rg_grad_flat >= 0., rg_grad_flat, -rg_grad_flat)
+		rg_grad_norm = tf.where(rg_grad_ok, 
+			tf.norm(rg_grad_safe, axis=1), tf.reduce_sum(rg_grad_abs, axis=1))
+		gp_loss = tf.square(rg_grad_norm - 1.0)
+
+		### generated encoder loss given z_input has generator ids **g_num**
+		self.g_en_loss = tf.nn.softmax_cross_entropy_with_logits(
+			labels=tf.one_hot(tf.reshape(self.z_input, [-1]), self.g_num, dtype=tf_dtype), 
+			logits=self.g_en_logits)
+
+		### d loss combination **g_num**
+		self.d_loss_mean = tf.reduce_mean(self.d_r_loss + self.d_g_loss)
+		self.d_loss_total = self.d_loss_mean + self.gp_loss_weight * tf.reduce_mean(gp_loss)
+
 		### build g loss
 		if self.g_loss_type == 'log':
-			self.g_loss = -tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=self.g_logits, labels=tf.zeros_like(self.g_logits, tf_dtype)), axis=None)
+			self.g_loss = -tf.nn.sigmoid_cross_entropy_with_logits(
+				logits=self.g_logits, labels=tf.zeros_like(self.g_logits, tf_dtype))
 		elif self.g_loss_type == 'mod':
-			self.g_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=self.g_logits, labels=tf.ones_like(self.g_logits, tf_dtype)), axis=None)
+			self.g_loss = tf.nn.sigmoid_cross_entropy_with_logits(
+				logits=self.g_logits, labels=tf.ones_like(self.g_logits, tf_dtype))
 		elif self.g_loss_type == 'was':
-			self.g_loss = -tf.reduce_mean(self.g_logits, axis=None)
+			self.g_loss = -self.g_logits
 		else:
 			raise ValueError('>>> g_loss_type: %s is not defined!' % self.g_loss_type)
+
+		self.g_loss_mean = tf.reduce_mean(self.g_loss, axis=None)
+		### mean matching
+		mm_loss = tf.reduce_mean(tf.square(tf.reduce_mean(self.g_layer, axis=0) - \
+			tf.reduce_mean(self.im_input, axis=0)), axis=None)
+
+		### g loss combination **g_num**
+		self.g_loss_total = self.g_loss_mean + self.en_loss_weight * tf.reduce_mean(self.g_en_loss)
 
 		### collect params
 		self.g_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, "g_net")
 		self.d_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, "d_net")
 
-		### mean matching
-		mm_loss = tf.reduce_mean(tf.square(tf.reduce_mean(self.g_layer, axis=0) - tf.reduce_mean(self.im_input, axis=0)), axis=None)
-
+		'''	
 		###consolidatoin loss
 		con_loss = 0.0
 		con_mem_ops = list()
 		con_info_ops = list()
+		self.con_mems = list()
+		self.con_infos = list()
 		with tf.variable_scope('consolid'):
-			tc = tf.get_variable('trace_counter', [1], dtype=tf.int32, initializer=tf.constant_initializer(0))
-			trace_id = tc[0] % self.con_trace_size
+			self.trace_counter = tf.get_variable('trace_counter', [1], dtype=tf.int32, initializer=tf.constant_initializer(0))
+			trace_id = self.trace_counter[0] % self.con_trace_size
 			for v in self.g_vars:
 				shape = v.get_shape().as_list()
 				v_mem = tf.get_variable(v.name[:-2], [self.con_trace_size] + shape, initializer=tf.constant_initializer(0.0))
 				v_info = tf.get_variable(v.name[:-2]+'_info', [self.con_trace_size] + shape, initializer=tf.constant_initializer(0.0))
 				con_loss += tf.reduce_sum(v_info * tf.square(v - v_mem), axis=None)
+				self.con_mems.append(v_mem)
+				self.con_infos.append(v_info)
 
 				### batch separated gradients wrt weights: E_z[(grad_w D(x))^2]
 				flat_logits = tf.reshape(self.g_logits, [-1])
@@ -148,7 +190,8 @@ class TFBabyGAN:
 				fl_diag = tf.diag(fl_pad)
 				fl_grads = 0.0
 				for i in range(self.batch_size):
-					fl_grads += fl_prsq[i] * tf.square(tf.gradients(fl_diag[i, ...], v)[0])
+					fl_grads += tf.square(tf.gradients(fl_diag[i, ...], v)[0])
+					#fl_grads += fl_prsq[i] * tf.square(tf.gradients(fl_diag[i, ...], v)[0])
 				fl_grads = fl_grads / tf.cast(fl_size, tf_dtype)
 
 				### ops tp update consolidation variables
@@ -158,9 +201,10 @@ class TFBabyGAN:
 					con_info_ops.append(v_info[trace_id, ...].assign(fl_grads))
 
 			with tf.control_dependencies(con_mem_ops + con_info_ops):
-				self.con_trace_update = tc.assign_add([1])
+				self.con_trace_update = self.trace_counter.assign_add([1])
 
 		self.g_loss = self.g_loss + self.mm_loss_weight * mm_loss + self.con_loss_weight * con_loss
+		'''
 
 		### logs
 		r_logits_mean = tf.reduce_mean(self.r_logits, axis=None)
@@ -170,33 +214,39 @@ class TFBabyGAN:
 		g_logits_diff = tf.sqrt(tf.reduce_mean(tf.square(tf.gradients(self.g_loss, self.g_logits)), axis=None))
 		g_out_diff = tf.sqrt(tf.reduce_mean(tf.square(tf.gradients(self.g_loss, self.g_layer)), axis=None))
 		
+		'''
 		diff = tf.zeros((1,), tf_dtype)
 		for v in self.d_vars:
 			if 'bn_' in v.name:
 				continue
-			diff = diff + tf.sqrt(tf.reduce_mean(tf.square(tf.gradients(self.d_r_loss, v)), axis=None))
+			diff = diff + tf.sqrt(tf.reduce_mean(
+				tf.square(tf.gradients(tf.reduce_mean(self.d_r_loss), v)), axis=None))
 		d_r_param_diff = 1.0 * diff / len(self.d_vars)
 
 		diff = tf.zeros((1,), tf_dtype)
 		for v in self.d_vars:
 			if 'bn_' in v.name:
 				continue
-			diff = diff + tf.sqrt(tf.reduce_mean(tf.square(tf.gradients(self.d_g_loss, v)), axis=None))
+			diff = diff + tf.sqrt(tf.reduce_mean(
+				tf.square(tf.gradients(tf.reduce_mean(self.d_g_loss), v)), axis=None))
 		d_g_param_diff = 1.0 * diff / len(self.d_vars)
 
 		diff = tf.zeros((1,), tf_dtype)
 		for v in self.d_vars:
 			if 'bn_' in v.name:
 				continue
-			diff = diff + tf.sqrt(tf.reduce_mean(tf.square(tf.gradients(self.d_loss, v)), axis=None))
+			diff = diff + tf.sqrt(tf.reduce_mean(
+				tf.square(tf.gradients(self.d_loss_mean, v)), axis=None))
 		d_param_diff = 1.0 * diff / len(self.d_vars)
 
 		diff = tf.zeros((1,), tf_dtype)
 		for v in self.g_vars:
 			if 'bn_' in v.name:
 				continue
-			diff = diff + tf.sqrt(tf.reduce_mean(tf.square(tf.gradients(self.g_loss, v)), axis=None))
+			diff = diff + tf.sqrt(tf.reduce_mean(
+				tf.square(tf.gradients(self.g_loss_mean, v)), axis=None))
 		g_param_diff = 1.0 * diff / len(self.g_vars)
+		'''
 
 		### compute stat of weights
 		self.nan_vars = 0.
@@ -218,62 +268,103 @@ class TFBabyGAN:
 
 		### build optimizers
 		update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
+		print '>>> update_ops list: ', update_ops
 		with tf.control_dependencies(update_ops):
-			self.g_opt = tf.train.AdamOptimizer(self.g_lr, beta1=self.g_beta1, beta2=self.g_beta2).minimize(self.g_loss, var_list=self.g_vars)
-			self.d_opt = tf.train.AdamOptimizer(self.d_lr, beta1=self.d_beta1, beta2=self.d_beta2).minimize(self.d_loss, var_list=self.d_vars)
+			self.g_opt = tf.train.AdamOptimizer(
+				self.g_lr, beta1=self.g_beta1, beta2=self.g_beta2).minimize(
+				self.g_loss_total, var_list=self.g_vars)
+			self.d_opt = tf.train.AdamOptimizer(
+				self.d_lr, beta1=self.d_beta1, beta2=self.d_beta2).minimize(
+				self.d_loss_total, var_list=self.d_vars)
 
 		### summaries
-		self.d_r_logs = [self.d_loss]#, d_param_diff, self.d_r_loss, r_logits_mean, d_r_logits_diff, d_r_param_diff]
-		self.d_g_logs = [self.d_g_loss]#, g_logits_mean, d_g_logits_diff, d_g_param_diff]
-		self.g_logs = [self.g_loss]#, g_logits_diff, g_out_diff, g_param_diff]	
+		self.d_r_logs = [self.d_loss_mean]#, d_param_diff, self.d_r_loss, r_logits_mean, d_r_logits_diff, d_r_param_diff]
+		self.d_g_logs = [tf.reduce_mean(self.d_g_loss)]#, g_logits_mean, d_g_logits_diff, d_g_param_diff]
+		self.g_logs = [self.g_loss_mean]#, g_logits_diff, g_out_diff, g_param_diff]	
+
+		### Policy gradient updates
+		self.pg_var = tf.get_variable('pg_var', dtype=tf_dtype,
+			initializer=self.g_rl_vals)
+		self.pg_q = tf.get_variable('pg_q', dtype=tf_dtype,
+			initializer=self.g_rl_vals)
+		self.pg_base = tf.get_variable('pg_base', dtype=tf_dtype,
+			initializer=0.0)
+		self.rl_counter = tf.get_variable('rl_counter', dtype=tf_dtype,
+			initializer=0.0)
+		self.pg_var_flat = tf.reshape(self.pg_var, [1, -1])
+		
+		print '>>> pg_var shape: ', self.sess.run(tf.shape(self.pg_var))
+		log_soft_policy = -tf.nn.softmax_cross_entropy_with_logits(
+			labels=tf.one_hot(tf.reshape(self.z_input, [-1]), self.g_num, dtype=tf_dtype), 
+			logits=tf.tile(self.pg_var_flat, tf.shape(tf.reshape(self.z_input, [-1, 1]))))
+		
+		g_entropy_loss = tf.nn.softmax_cross_entropy_with_logits(
+			labels=1.0 * tf.ones_like(self.pg_var_flat) / self.g_num, 
+			logits=self.pg_var_flat)
+		
+		pg_loss = tf.reshape(self.g_loss, [-1]) + 0. * self.en_loss_weight * tf.reshape(self.g_en_loss, [-1])
+		print '>>> g_loss shape: ', self.g_loss.get_shape()
+		print '>>> g_en_loss shape: ', self.g_en_loss.get_shape()
+		print '>>> pg_loss shape: ', pg_loss.get_shape()
+		print '>>> log_soft_policy shape: ', log_soft_policy.get_shape()
+		print '>>> g_entropy_loss shape: ', g_entropy_loss.get_shape()
+		
+		pg_q_z = tf.gather(self.pg_q, tf.reshape(self.z_input, [-1]))
+		pg_q_opt = tf.scatter_update(self.pg_q, tf.reshape(self.z_input, [-1]), 
+				self.pg_base_lr*pg_q_z + (1-self.pg_base_lr) * -pg_loss)
+		rl_counter_opt = tf.assign(self.rl_counter, self.rl_counter * 0.9999)
+
+		with tf.control_dependencies([pg_q_opt, rl_counter_opt]):
+			pg_loss_total = tf.reduce_mean(
+				-log_soft_policy * (pg_q_z - 0.0 * self.pg_base) + \
+				self.en_loss_weight * 0.0 * self.rl_counter * g_entropy_loss)
+		self.pg_opt = tf.train.GradientDescentOptimizer(self.pg_lr).minimize(
+			pg_loss_total, var_list=[self.pg_var])
 
 	def build_gen(self, z, act, train_phase):
-		h1_size = 128
-		h2_size = 128
-		h3_size = 128
-		h4_size = 128
+		ol = list()
 		with tf.variable_scope('g_net'):
-			#h1 = linear(z, h1_size, scope='fc1')
-			h1 = dense(z, h1_size, scope='fc1')
-			h1 = act(h1)
+			for gi in range(self.g_num):
+				with tf.variable_scope('gnum_%d' % gi):
+					### **g_num**
+					zi = tf.random_uniform([tf.shape(z)[0], self.z_dim], 
+						minval=-self.z_range, maxval=self.z_range, dtype=tf_dtype)
+					bn = tf.contrib.layers.batch_norm
+			
+					### fully connected from hidden z 44128 to image shape
+					h1 = act(bn(dense(zi, 128//4, scope='fc1')))
+					h2 = act(bn(dense(h1, 64//4, scope='fc2')))
+					h3 = dense(h2, self.data_dim, scope='fco')
+					
+					### output activation to bring data values in (-1,1)
+					ol.append(h3)
 
-			h2 = dense(h1, h2_size, scope='fc2')
-			h2 = act(h2)
-
-			#h3 = dense(h2, h3_size, scope='fc3')
-			#h3 = act(h3)
-
-			#h4 = dense(h3, h4_size, scope='fc4')
-			#h4 = act(h4)
-
-			o = dense(h2, self.data_dim, scope='fco')
+			z_1_hot = tf.reshape(tf.one_hot(z, self.g_num, dtype=tf_dtype), [-1, self.g_num, 1])
+			z_map = tf.tile(z_1_hot, [1, 1, self.data_dim])
+			os = tf.stack(ol, axis=1)
+			o = tf.reduce_sum(os * z_map, axis=1)
 			return o
 
 	def build_dis(self, data_layer, act, train_phase, reuse=False):
-		h1_size = 128
-		h2_size = 128
-		h3_size = 128
-		h4_size = 128
+		bn = tf.contrib.layers.batch_norm
 		with tf.variable_scope('d_net'):
-			h1 = dense(data_layer, h1_size, scope='fc1', reuse=reuse)
-			h1 = act(h1)
-
-			#h2 = dense_batch(h1, h2_size, scope='fc2', reuse=reuse, phase=train_phase)
-			h2 = dense(h1, h2_size, scope='fc2', reuse=reuse)
-			h2 = act(h2)
-			
-			#h3 = dense(h2, h3_size, scope='fc3', reuse=reuse)
-			#h3 = act(h3)
-
-			#h4 = dense(h3, h4_size, scope='fc4', reuse=reuse)
-			#h4 = act(h4)
-
+			h1 = act(dense(data_layer, 64, scope='fc1', reuse=reuse))
+			h2 = act(dense(h1, 128, scope='fc2', reuse=reuse))
 			o = dense(h2, 1, scope='fco', reuse=reuse)
-			return o
+			return o, h2
+
+	def build_encoder(self, hidden_layer, act, train_phase, reuse=False):
+		bn = tf.contrib.layers.batch_norm
+		with tf.variable_scope('g_net'):
+			with tf.variable_scope('encoder'):
+				flat = hidden_layer
+				flat = act(bn(dense(flat, 128, scope='fc', reuse=reuse), reuse=reuse, scope='bf1'))
+				o = dense(flat, self.g_num, scope='fco', reuse=reuse)
+				return o
 
 	def start_session(self):
 		self.saver = tf.train.Saver(tf.global_variables(), 
-			keep_checkpoint_every_n_hours=0.1, max_to_keep=10)
+			keep_checkpoint_every_n_hours=1, max_to_keep=5)
 
 	def save(self, fname):
 		self.saver.save(self.sess, fname)
@@ -303,6 +394,7 @@ class TFBabyGAN:
 			return u_logits.flatten()
 
 		### sample z from uniform (-1,1)
+		'''
 		if z_data is None:
 			z_data = np.random.uniform(low=-self.z_range, high=self.z_range, 
 				size=[batch_size, self.z_dim-self.man_dim])
@@ -313,7 +405,18 @@ class TFBabyGAN:
 				z_man = np.zeros((batch_size, self.man_dim))
 				z_man[range(batch_size), man_id] = 1.
 				z_data = np.concatenate([z_data, z_man], axis=1)
-		z_data = z_data.astype(np_dtype)
+		'''
+		
+		### multiple generator uses z_data to select gen **g_num**
+		if z_data is None:
+			#g_th = min(1 + self.rl_counter // 1000, self.g_num)
+			g_th = self.g_num
+			z_pr = np.exp(self.g_rl_pvals[:g_th])
+			z_pr = z_pr / np.sum(z_pr)
+			z_data = np.random.choice(g_th, size=batch_size, p=z_pr)
+			z_data = np.random.randint(low=0, high=self.g_num, size=batch_size)
+
+		#z_data = z_data.astype(np_dtype)
 
 		### only forward generator on z
 		if gen_only:
@@ -322,13 +425,31 @@ class TFBabyGAN:
 			return g_layer
 
 		### run one training step on discriminator, otherwise on generator, and log
-		feed_dict = {self.im_input:batch_data, self.z_input: z_data, self.e_input: e_data, self.train_phase: True}
+		feed_dict = {self.im_input:batch_data, self.z_input: z_data, 
+			self.e_input: e_data, self.train_phase: True}
 		if not gen_update:
-			res_list = [self.g_layer, self.g_logs, self.d_r_logs, self.d_g_logs, self.d_opt]
+			res_list = [self.g_layer, self.g_logs, self.d_r_logs, 
+				self.d_g_logs, self.d_opt]
 			res_list = self.sess.run(res_list, feed_dict=feed_dict)
 		else:
-			res_list = [self.g_layer, self.g_logs, self.d_r_logs, self.d_g_logs, self.g_opt]
+			#z_data_delta = np.random.uniform(low=-0.1, high=0.1, 
+			#	size=[batch_size, self.z_dim-self.man_dim])
+			#z_data_delta = np.pad(z_data_delta, ((0, 0), (0, self.man_dim)), 'constant')
+			#z_data = z_data[0, ...] + z_data_delta
+			res_list = [self.g_layer, self.g_logs, self.d_r_logs, 
+				self.d_g_logs, self.g_opt, self.pg_opt]
 			res_list = self.sess.run(res_list, feed_dict=feed_dict)
-			self.sess.run(self.con_trace_update, feed_dict=feed_dict)
+			self.g_rl_vals, self.g_rl_pvals = self.sess.run((self.pg_q, self.pg_var), feed_dict={})
+			### RL value updates
+			#self.g_rl_vals[z_data] += (1-self.rl_lr) * \
+			#	(-res_list[3][:,0] - self.g_rl_vals[z_data])
+			#self.g_rl_vals += 1e-3
+			#self.rl_counter += 1
+
+			#self.sess.run(self.con_trace_update, feed_dict=feed_dict)
+
+			#con_res = self.sess.run([self.trace_counter, self.con_mems, self.con_infos])
+			#with open('/home/mahyar/con_results/con_%d.cpk' % con_res[0][0], 'wb+') as fs:
+			#	pk.dump(con_res, fs)
 
 		return tuple(res_list[1:]), res_list[0]

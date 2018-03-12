@@ -48,9 +48,11 @@ import tf_baby_gan
 log_path_png = log_path+'/fields'
 log_path_snap = log_path+'/snapshots'
 log_path_manifold = log_path+'/manifolds'
+log_path_data = log_path+'/data_img'
 os.system('mkdir -p '+log_path_png)
 os.system('mkdir -p '+log_path_snap)
 os.system('mkdir -p '+log_path_manifold)
+os.system('mkdir -p '+log_path_data)
 
 def generate_normal_data(sample_size, centers, stds, sample_ratio=None, labels=None):
 	### TODO: handle excessive samples randomly
@@ -97,20 +99,48 @@ def generate_circle_data(data_size):
 	dataset = np.c_[x,y]
 	return dataset, np.ones(dataset.shape[0])
 
-def plot_dataset(dataset, gt, title='Dataset'):
+def generate_line_data(data_size):
+	num_lines = 4
+	z = np.random.uniform(0.0, 1.0, data_size)
+	ch = np.random.randint(0, num_lines, data_size)
+	
+	x1 = z * .25 + (1-z) * .75
+	y1 = -1. * x1 + 1.
+	
+	x2 = -x1 
+	y2 = -1. * x2 - 1.
+
+	x3 = x1
+	y3 = 1. * x3 - 1.
+
+	x4 = x2
+	y4 = 1. * x4 + 1.
+
+	dx = np.c_[x1, x2, x3, x4]
+	dy = np.c_[y1, y2, y3, y4]
+	data = np.c_[dx[np.arange(data_size), ch], dy[np.arange(data_size), ch]]
+	#data = np.c_[x1, y1]
+	return data
+
+def plot_dataset(datasets, color, title='Dataset', pathname=None):
 	### plot the dataset
 	plt.figure(1,figsize=(8,6))
-	if gt is None:
-		gt = np.ones(dataset.shape[0])
-	plt.scatter(dataset[:,0], dataset[:,1], c=gt.astype(int))
+	plt.clf()
+	#plt.scatter(dataset[:,0], dataset[:,1], c=gt.astype(int))
+
+	for i, d in enumerate(datasets):
+		plt.scatter(d[:,0], d[:,1], c=color[i], marker='.')
 	plt.title(title)
 	ax = plt.gca()
-	start, end = ax.get_xlim()
-	start = np.floor(start)
-	end = np.ceil(end)
-	ax.xaxis.set_ticks(np.arange(start, end, 1.0))
+	#start, end = ax.get_xlim()
+	#start = np.floor(start)
+	#end = np.ceil(end)
+	#ax.xaxis.set_ticks(np.arange(start, end, 1.0))
+	ax.set_xlim(-2, 2)
+	ax.set_ylim(-2, 2)
 	plt.grid(True, which='both', linestyle='dotted')
-	#plt.savefig(log_path + 'train_dataset_plot' + '.pdf')
+	if pathname is not None:
+		plt.savefig(pathname, dpi=300)
 	return ax
 
 '''
@@ -146,7 +176,7 @@ def plot_manifold(baby, batch_size, fignum, save_path, title, fov=1.0):
 	ax.plot(XX, YY, np.zeros(XX.shape) - z_range, zdir='z', c='r')
 	ax.grid(True, which='both', linestyle='dotted')
 	ax.set_title(title+'_generator_manifold')	
-	fig.savefig(save_path)
+	fig.savefig(save_path, dpi=300)
 
 def baby_gan_field_2d(baby, x_min, x_max, y_min, y_max, batch_size):
 	XX, YY = np.mgrid[x_min:x_max:80j, y_min:y_max:80j]
@@ -211,7 +241,7 @@ def plot_field_2d(field_params, fov, r_data, br_data, g_data, bg_data, fignum, s
 	cset = ax.contour(field_params[0], field_params[1], field_params[2], zdir='z', offset=zlim_low, cmap=cm.jet)
 	ax.set_title(title+'_score_surf')
 	
-	fig.savefig(save_path)
+	fig.savefig(save_path, dpi=300)
 
 def plot_field_1d(field_params, r_data, br_data, g_data, bg_data, fignum, save_path, title):
 	### Estimate densities for real and generated data
@@ -256,7 +286,7 @@ def plot_field_1d(field_params, r_data, br_data, g_data, bg_data, fignum, save_p
 	ax.set_ylabel('DIS Value')
 	ax.set_title(title+'_score_surf')
 
-	fig.savefig(save_path)
+	fig.savefig(save_path, dpi=300)
 
 def plot_time_series(name, vals, fignum, save_path, color='b', ytype='linear', itrs=None):
 	plt.figure(fignum, figsize=(8, 6))
@@ -271,7 +301,7 @@ def plot_time_series(name, vals, fignum, save_path, color='b', ytype='linear', i
 	plt.ylabel('Values')
 	if ytype=='log':
 		plt.yscale('log')
-	plt.savefig(save_path)
+	plt.savefig(save_path, dpi=300)
 
 def plot_time_mat(mat, mat_names, fignum, save_path, ytype=None, itrs=None):
 	for n in range(mat.shape[1]):
@@ -296,20 +326,20 @@ def sample_baby_gan(baby, sample_size, batch_size=512, z_data=None):
 '''
 Training Baby GAN
 '''
-def train_baby_gan(baby, centers, stds, ratios=None):
+def train_baby_gan(baby, data_sampler):
 	### dataset definition
 	data_dim = len(centers[0])
-	train_size = 51200
+	train_size = 50000
 
 	### drawing configs
 	fov = 4 ## field of view in field plot
 	d_draw = 0
-	g_draw = 10
+	g_draw = 0
 	g_manifold = 0
 	field_sample_size = 2048
 
 	### training configs
-	max_itr_total = 1e5
+	max_itr_total = 5e5
 	g_max_itr = 2e4
 	d_updates = 5
 	g_updates = 1
@@ -323,6 +353,7 @@ def train_baby_gan(baby, centers, stds, ratios=None):
 	eval_logs = list()
 	stats_logs = list()
 	itrs_logs = list()
+	rl_vals_logs = list()
 
 	### training inits
 	d_itr = 0
@@ -333,14 +364,14 @@ def train_baby_gan(baby, centers, stds, ratios=None):
 	widgets = ["baby_gan", Percentage(), Bar(), ETA()]
 	pbar = ProgressBar(maxval=max_itr_total, widgets=widgets)
 	pbar.start()
+	train_dataset = data_sampler(train_size)
 	#train_dataset, train_gt = \
 	#	generate_normal_data(train_size, centers, stds, ratios)
 
 	while itr_total < max_itr_total:
 		### get samples from dataset 
-		#np.random.shuffle(train_dataset)
-		train_dataset, train_gt = \
-			generate_normal_data(train_size, centers, stds, ratios)
+		np.random.shuffle(train_dataset)
+		#train_dataset = data_sampler(train_size)
 		#	generate_circle_data(train_size)
 		
 		epoch += 1
@@ -356,6 +387,15 @@ def train_baby_gan(baby, centers, stds, ratios=None):
 			batch_data = batch_data.reshape((batch_data.shape[0], data_dim))
 			fetch_batch = False
 			while fetch_batch is False:
+				### evaluate energy distance between real and gen distributions
+				if itr_total % eval_step == 0:
+					e_dist, e_norm, net_stats = eval_baby_gan(baby, data_sampler, itr_total)
+					e_dist = 0 if e_dist < 0 else np.sqrt(e_dist)
+					eval_logs.append([e_dist, e_dist/np.sqrt(2.0*e_norm)])
+					stats_logs.append(net_stats)
+					itrs_logs.append(itr_total)
+					rl_vals_logs.append(list(baby.g_rl_vals))
+
 				### discriminator update
 				if d_update_flag is True:
 					logs, batch_g_data = baby.step(batch_data, batch_size=None, gen_update=False)
@@ -411,14 +451,6 @@ def train_baby_gan(baby, centers, stds, ratios=None):
 					itr_total += 1
 					d_update_flag = True if g_itr % g_updates == 0 else False
 				
-				### evaluate energy distance between real and gen distributions
-				if itr_total % eval_step == 0:
-					e_dist, e_norm, net_stats = eval_baby_gan(baby, centers, stds, ratios)
-					e_dist = 0 if e_dist < 0 else np.sqrt(e_dist)
-					eval_logs.append([e_dist, e_dist/np.sqrt(2.0*e_norm)])
-					stats_logs.append(net_stats)
-					itrs_logs.append(itr_total)	
-				
 				if itr_total >= max_itr_total:
 					break
 
@@ -437,6 +469,7 @@ def train_baby_gan(baby, centers, stds, ratios=None):
 		d_g_logs_mat = np.array(d_g_logs)
 		eval_logs_mat = np.array(eval_logs)
 		stats_logs_mat = np.array(stats_logs)
+		rl_vals_logs_mat = np.array(rl_vals_logs)
 
 		g_logs_names = ['g_loss', 'g_logit_diff', 'g_out_diff', 'g_param_diff']
 		d_r_logs_names = ['d_loss', 'd_param_diff', 'd_r_loss', 'r_logit_data', 'd_r_logit_diff', 'd_r_param_diff']
@@ -451,12 +484,24 @@ def train_baby_gan(baby, centers, stds, ratios=None):
 		plot_time_mat(eval_logs_mat, eval_logs_names, 1, log_path, itrs=itrs_logs)
 		plot_time_mat(stats_logs_mat, stats_logs_names, 1, log_path, itrs=itrs_logs)
 
-def eval_baby_gan(baby, centers, stds, ratios=None):
+		### plot rl_vals **g_num**
+		plt.figure(0, figsize=(8, 6))
+		plt.clf()
+		for g in range(baby.g_num):
+			plt.plot(itrs_logs, rl_vals_logs_mat[:, g], label='g_%d' % g)
+		plt.grid(True, which='both', linestyle='dotted')
+		plt.title('RL Returns')
+		plt.xlabel('Iterations')
+		plt.ylabel('Values')
+		plt.legend(loc=0)
+		plt.savefig(log_path+'/rl_returns.png', dpi=300)
+
+def eval_baby_gan(baby, data_sampler, itr):
 	### dataset definition
 	data_dim = len(centers[0])
 	sample_size = 10000
-	r_samples, gt = \
-		generate_normal_data(sample_size, centers, stds, ratios)
+	r_samples = data_sampler(sample_size)
+		#generate_normal_data(sample_size, centers, stds, ratios)
 		#generate_circle_data(sample_size)
 
 	g_samples = sample_baby_gan(baby, sample_size)
@@ -472,6 +517,11 @@ def eval_baby_gan(baby, centers, stds, ratios=None):
 	### get network stats
 	net_stats = baby.step(None, None, stats_only=True)
 
+	### draw samples
+	data_r = r_samples
+	data_g = g_samples
+	plot_dataset([data_r, data_g], color=['r', 'b'], pathname=log_path_data+'/data_%06d.png' % itr)
+
 	return 2*rg_score - rr_score - gg_score, rg_score, net_stats
 
 
@@ -485,12 +535,17 @@ if __name__ == '__main__':
 	#stds = [[0.01, 0.01], [0.01, 0.01], [0.01, 0.01], [0.01, 0.01]]
 	#ratios = [0.2, 0.2, 0.4, 0.2]
 	ratios = None
-	data_dim = len(centers[0])
+	data_dim = 2
+
+	### function with data_size input that generates randomized training data
+	data_sampler = generate_line_data
+	data_r = data_sampler(50000)
+	plot_dataset([data_r], color=['r'], pathname=log_path+'/real_dataset.png')
 
 	'''
 	TENSORFLOW SETUP
 	'''
-	gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.3)
+	gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.2)
 	config = tf.ConfigProto(allow_soft_placement=True, gpu_options=gpu_options)
 	sess = tf.Session(config=config)
 	
@@ -506,17 +561,17 @@ if __name__ == '__main__':
 	GAN SETUP
 	'''
 	### train baby gan
-	train_baby_gan(baby, centers, stds, ratios)
+	train_baby_gan(baby, data_sampler)
 
 	### load ganist
 	#ganist.load(ganist_path)
 
 	### eval baby gan
-	e_dist, e_norm, net_stats = eval_baby_gan(baby, centers, stds)
-	with open(log_path+'/txt_logs.txt', 'w+') as fs:
-		e_dist = 0 if e_dist < 0 else np.sqrt(e_dist)
-		print >>fs, '>>> energy_distance: %f, energy_coef: %f' % (e_dist, e_dist/np.sqrt(2.0*e_norm))
-		print >>fs, '>>> nan_vars: %f, inf_vars: %f, tiny_vars: %f, big_vars: %f, count_vars: %d' % tuple(net_stats)
+	#e_dist, e_norm, net_stats = eval_baby_gan(baby, centers, stds)
+	#with open(log_path+'/txt_logs.txt', 'w+') as fs:
+#		e_dist = 0 if e_dist < 0 else np.sqrt(e_dist)
+#		print >>fs, '>>> energy_distance: %f, energy_coef: %f' % (e_dist, e_dist/np.sqrt(2.0*e_norm))
+#		print >>fs, '>>> nan_vars: %f, inf_vars: %f, tiny_vars: %f, big_vars: %f, count_vars: %d' % tuple(net_stats)
 
 	
 
