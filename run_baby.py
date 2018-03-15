@@ -102,7 +102,8 @@ def generate_circle_data(data_size):
 def generate_line_data(data_size):
 	num_lines = 4
 	z = np.random.uniform(0.0, 1.0, data_size)
-	ch = np.random.randint(0, num_lines, data_size)
+	#ch = np.random.randint(0, num_lines, data_size)
+	ch = np.random.choice(num_lines, size=data_size, replace=True, p=[0.25, 0.25, 0.25, 0.25])
 	
 	x1 = z * .25 + (1-z) * .75
 	y1 = -1. * x1 + 1.
@@ -122,6 +123,10 @@ def generate_line_data(data_size):
 	#data = np.c_[x1, y1]
 	return data
 
+def generate_dot_data(data_size):
+	data = np.random.choice([2., -2.], size=data_size, replace=True, p=[0.5, 0.5])
+	return data
+
 def plot_dataset(datasets, color, title='Dataset', pathname=None):
 	### plot the dataset
 	plt.figure(1,figsize=(8,6))
@@ -129,6 +134,9 @@ def plot_dataset(datasets, color, title='Dataset', pathname=None):
 	#plt.scatter(dataset[:,0], dataset[:,1], c=gt.astype(int))
 
 	for i, d in enumerate(datasets):
+		d = d.reshape([d.size, 1]) if len(d.shape) == 1 else d
+		if d.shape[-1] == 1:
+			d = np.c_[d, np.ones(d.shape)]
 		plt.scatter(d[:,0], d[:,1], c=color[i], marker='.')
 	plt.title(title)
 	ax = plt.gca()
@@ -136,13 +144,35 @@ def plot_dataset(datasets, color, title='Dataset', pathname=None):
 	#start = np.floor(start)
 	#end = np.ceil(end)
 	#ax.xaxis.set_ticks(np.arange(start, end, 1.0))
-	ax.set_xlim(-2, 2)
-	ax.set_ylim(-2, 2)
+	ax.set_xlim(-3, 3)
+	ax.set_ylim(-3, 3)
 	plt.grid(True, which='both', linestyle='dotted')
 	if pathname is not None:
 		plt.savefig(pathname, dpi=300)
 	return ax
 
+def plot_manifold_1d(baby, pathname=None, title='Generator Function'):
+	data_size = 200
+	z_range = baby.z_range
+	zi = np.linspace(-z_range, z_range, data_size)
+	data = sample_baby_gan(baby, data_size, zi_data=zi.reshape(data_size, 1))
+
+	plt.figure(1,figsize=(6,6))
+	plt.clf()
+	plt.plot(zi, data, 'b')
+	plt.title(title)
+	ax = plt.gca()
+	#start, end = ax.get_xlim()
+	#start = np.floor(start)
+	#end = np.ceil(end)
+	#ax.xaxis.set_ticks(np.arange(start, end, 1.0))
+	ax.set_xlim(-1.5, 1.5)
+	ax.set_ylim(-4, 4)
+	plt.grid(True, which='both', linestyle='dotted')
+	if pathname is not None:
+		plt.savefig(pathname, dpi=300)
+	return ax
+	
 '''
 Plots generator 2D output data versus hidden z
 '''
@@ -178,7 +208,7 @@ def plot_manifold(baby, batch_size, fignum, save_path, title, fov=1.0):
 	ax.set_title(title+'_generator_manifold')	
 	fig.savefig(save_path, dpi=300)
 
-def baby_gan_field_2d(baby, x_min, x_max, y_min, y_max, batch_size):
+def baby_gan_field_2d(baby, x_min, x_max, y_min, y_max, batch_size=128):
 	XX, YY = np.mgrid[x_min:x_max:80j, y_min:y_max:80j]
 	data_mat = np.c_[XX.ravel(), YY.ravel()]
 	logits = np.zeros(data_mat.shape[0])
@@ -201,16 +231,21 @@ def baby_gan_field_1d(baby, x_min, x_max, batch_size):
 	return (data_mat, logits, (x_min, x_max))
 
 
-def plot_field_2d(field_params, fov, r_data, br_data, g_data, bg_data, fignum, save_path, title):
+def plot_field_2d(field_params, fov, fignum, save_path, title, 
+	r_data=None, br_data=None, g_data=None, bg_data=None):
 	# plot the line, the points, and the nearest vectors to the plane
-	fig = plt.figure(fignum, figsize=(12,20))
+	fig = plt.figure(0, figsize=(12,20))
 	fig.clf()
 	### top subplot: decision boundary
 	ax = fig.add_subplot(2, 1, 1)
-	ax.scatter(r_data[:, 0], r_data[:, 1], c='#FF8B74', zorder=9, cmap=plt.cm.Paired, edgecolor='black')
-	ax.scatter(br_data[:, 0], br_data[:, 1], c='r', zorder=10, cmap=plt.cm.Paired, edgecolor='black')
-	ax.scatter(g_data[:, 0], g_data[:, 1], c='#74CFFF', zorder=9, cmap=plt.cm.Paired, edgecolor='black')
-	ax.scatter(bg_data[:, 0], bg_data[:, 1], c='b', zorder=10, cmap=plt.cm.Paired, edgecolor='black')
+	if r_data is not None:
+		ax.scatter(r_data[:, 0], r_data[:, 1], c='#FF8B74', zorder=9, cmap=plt.cm.Paired, edgecolor='black')
+	if br_data is not None:
+		ax.scatter(br_data[:, 0], br_data[:, 1], c='r', zorder=10, cmap=plt.cm.Paired, edgecolor='black')
+	if g_data is not None:
+		ax.scatter(g_data[:, 0], g_data[:, 1], c='#74CFFF', zorder=9, cmap=plt.cm.Paired, edgecolor='black')
+	if bg_data is not None:
+		ax.scatter(bg_data[:, 0], bg_data[:, 1], c='b', zorder=10, cmap=plt.cm.Paired, edgecolor='black')
 
 	
 	probs = 1.0 / (1.0 + np.exp(-field_params[2]))
@@ -311,16 +346,17 @@ def plot_time_mat(mat, mat_names, fignum, save_path, ytype=None, itrs=None):
 		plot_time_series(fig_name, mat[:,n], fignum, save_path+'/'+fig_name+'.png', ytype=ytype, itrs=itrs)
 
 '''
-Sample sample_size data points from ganist.
+Sample sample_size data points from baby.
 '''
-def sample_baby_gan(baby, sample_size, batch_size=512, z_data=None):
+def sample_baby_gan(baby, sample_size, batch_size=512, z_data=None, zi_data=None):
 	g_samples = np.zeros([sample_size, baby.data_dim])
 	for batch_start in range(0, sample_size, batch_size):
 		batch_end = batch_start + batch_size
 		batch_len = g_samples[batch_start:batch_end, ...].shape[0]
 		batch_z = z_data[batch_start:batch_end, ...] if z_data is not None else None
+		batch_zi = zi_data[batch_start:batch_end, ...] if zi_data is not None else None
 		g_samples[batch_start:batch_end, ...] = \
-			baby.step(None, batch_len, gen_only=True, z_data=batch_z)
+			baby.step(None, batch_len, gen_only=True, z_data=batch_z, zi_data=batch_zi)
 	return g_samples
 
 '''
@@ -328,7 +364,7 @@ Training Baby GAN
 '''
 def train_baby_gan(baby, data_sampler):
 	### dataset definition
-	data_dim = len(centers[0])
+	data_dim = baby.data_dim
 	train_size = 50000
 
 	### drawing configs
@@ -336,7 +372,7 @@ def train_baby_gan(baby, data_sampler):
 	d_draw = 0
 	g_draw = 0
 	g_manifold = 0
-	field_sample_size = 2048
+	field_sample_size = 1000
 
 	### training configs
 	max_itr_total = 5e5
@@ -354,6 +390,7 @@ def train_baby_gan(baby, data_sampler):
 	stats_logs = list()
 	itrs_logs = list()
 	rl_vals_logs = list()
+	rl_pvals_logs = list()
 
 	### training inits
 	d_itr = 0
@@ -364,7 +401,7 @@ def train_baby_gan(baby, data_sampler):
 	widgets = ["baby_gan", Percentage(), Bar(), ETA()]
 	pbar = ProgressBar(maxval=max_itr_total, widgets=widgets)
 	pbar.start()
-	train_dataset = data_sampler(train_size)
+	train_dataset = data_sampler(train_size).reshape([-1, data_dim])
 	#train_dataset, train_gt = \
 	#	generate_normal_data(train_size, centers, stds, ratios)
 
@@ -383,8 +420,7 @@ def train_baby_gan(baby, data_sampler):
 			pbar.update(itr_total)
 			batch_end = batch_start + batch_size
 			### fetch batch data
-			batch_data = train_dataset[batch_start:batch_end, 0] if data_dim == 1 else train_dataset[batch_start:batch_end, :]
-			batch_data = batch_data.reshape((batch_data.shape[0], data_dim))
+			batch_data = train_dataset[batch_start:batch_end, :]
 			fetch_batch = False
 			while fetch_batch is False:
 				### evaluate energy distance between real and gen distributions
@@ -395,6 +431,19 @@ def train_baby_gan(baby, data_sampler):
 					stats_logs.append(net_stats)
 					itrs_logs.append(itr_total)
 					rl_vals_logs.append(list(baby.g_rl_vals))
+					z_pr = np.exp(baby.pg_temp * baby.g_rl_pvals)
+					z_pr = z_pr / np.sum(z_pr)
+					rl_pvals_logs.append(list(z_pr))
+					### field plots
+					'''
+					g_data = sample_baby_gan(baby, field_sample_size)
+					r_data = train_dataset[0:field_sample_size, ...]
+					field_params = baby_gan_field_2d(baby, -fov, fov, -fov, fov, batch_size*10)
+					plot_field_2d(field_params, fov, 1,
+						log_path_png+'/field_%06d.png' % itr_total, 
+						'DIS_%d_%d_%d' % (d_itr%d_updates, g_itr, itr_total), 
+						r_data=r_data, g_data=g_data)
+					'''
 
 				### discriminator update
 				if d_update_flag is True:
@@ -404,20 +453,20 @@ def train_baby_gan(baby, data_sampler):
 					d_r_logs.append(logs[1])
 					d_g_logs.append(logs[2])
 					### collect gen and real data
-					g_data = sample_baby_gan(baby, field_sample_size)
-					r_data = train_dataset[0:field_sample_size, 0:data_dim]
-					r_data = r_data.reshape((r_data.shape[0], data_dim))
+					#g_data = sample_baby_gan(baby, field_sample_size)
+					#r_data = train_dataset[0:field_sample_size, 0:data_dim]
+					#r_data = r_data.reshape((r_data.shape[0], data_dim))
 					### calculate and plot field of decision for dis update
-					field_params = None
-					if d_draw > 0 and d_itr % d_draw == 0:
-						if data_dim == 1:
-							field_params = baby_gan_field_1d(baby, -fov, fov, batch_size*10)
-							plot_field_1d(field_params, r_data, batch_data, g_data, batch_g_data, 0,
-								log_path_png+'/field_%06d.png' % itr_total, 'DIS_%d_%d_%d' % (d_itr%d_updates, g_itr, itr_total))    
-						else:
-							field_params = baby_gan_field_2d(baby, -fov, fov, -fov, fov, batch_size*10)
-							plot_field_2d(field_params, fov, r_data, batch_data, g_data, batch_g_data, 0,
-								log_path_png+'/field_%06d.png' % itr_total, 'DIS_%d_%d_%d' % (d_itr%d_updates, g_itr, itr_total))
+					#field_params = None
+					#if d_draw > 0 and d_itr % d_draw == 0:
+					#	if data_dim == 1:
+					#		field_params = baby_gan_field_1d(baby, -fov, fov, batch_size*10)
+					#		plot_field_1d(field_params, r_data, batch_data, g_data, batch_g_data, 0,
+					#			log_path_png+'/field_%06d.png' % itr_total, 'DIS_%d_%d_%d' % (d_itr%d_updates, g_itr, itr_total))    
+					#	else:
+					#		field_params = baby_gan_field_2d(baby, -fov, fov, -fov, fov, batch_size*10)
+					#		plot_field_2d(field_params, fov, r_data, batch_data, g_data, batch_g_data, 0,
+					#			log_path_png+'/field_%06d.png' % itr_total, 'DIS_%d_%d_%d' % (d_itr%d_updates, g_itr, itr_total))
 					d_itr += 1
 					itr_total += 1
 					d_update_flag = False if d_itr % d_updates == 0 else True
@@ -431,22 +480,22 @@ def train_baby_gan(baby, data_sampler):
 					d_r_logs.append(logs[1])
 					d_g_logs.append(logs[2])
 					### collect gen and real data
-					g_data = sample_baby_gan(baby, field_sample_size)
+					#g_data = sample_baby_gan(baby, field_sample_size)
 					### calculate and plot field of decision for gen update
-					if g_draw > 0 and g_itr % g_draw == 0:
-						if data_dim == 1:
-							if field_params is None:
-								field_params = baby_gan_field_1d(baby, -fov, fov, batch_size*10)
-							plot_field_1d(field_params, r_data, batch_data, g_data, batch_g_data, 0,
-								log_path_png+'/field_%06d.png' % itr_total, 'GEN_%d_%d_%d' % (g_itr%g_updates, g_itr, itr_total))
-						else:
-							if field_params is None:
-								field_params = baby_gan_field_2d(baby, -fov, fov, -fov, fov, batch_size*10)
-							plot_field_2d(field_params, fov, r_data, batch_data, g_data, batch_g_data, 0,
-								log_path_png+'/field_%06d.png' % itr_total, 'GEN_%d_%d_%d' % (g_itr%g_updates, g_itr, itr_total))
+					#if g_draw > 0 and g_itr % g_draw == 0:
+					#	if data_dim == 1:
+					#		if field_params is None:
+					#			field_params = baby_gan_field_1d(baby, -fov, fov, batch_size*10)
+					#		plot_field_1d(field_params, r_data, batch_data, g_data, batch_g_data, 0,
+					#			log_path_png+'/field_%06d.png' % itr_total, 'GEN_%d_%d_%d' % (g_itr%g_updates, g_itr, itr_total))
+					#	else:
+					#		if field_params is None:
+					#			field_params = baby_gan_field_2d(baby, -fov, fov, -fov, fov, batch_size*10)
+					#		plot_field_2d(field_params, fov, r_data, batch_data, g_data, batch_g_data, 0,
+					#			log_path_png+'/field_%06d.png' % itr_total, 'GEN_%d_%d_%d' % (g_itr%g_updates, g_itr, itr_total))
 					### draw manifold of generator data
-					if g_manifold > 0 and g_itr % g_manifold == 0:
-						plot_manifold(baby, 200, 0, log_path_manifold+'/manifold_%06d.png' % itr_total, 'GEN_%d_%d_%d' % (g_itr%g_updates, g_itr, itr_total))
+					#if g_manifold > 0 and g_itr % g_manifold == 0:
+					#	plot_manifold(baby, 200, 0, log_path_manifold+'/manifold_%06d.png' % itr_total, 'GEN_%d_%d_%d' % (g_itr%g_updates, g_itr, itr_total))
 					g_itr += 1
 					itr_total += 1
 					d_update_flag = True if g_itr % g_updates == 0 else False
@@ -470,6 +519,7 @@ def train_baby_gan(baby, data_sampler):
 		eval_logs_mat = np.array(eval_logs)
 		stats_logs_mat = np.array(stats_logs)
 		rl_vals_logs_mat = np.array(rl_vals_logs)
+		rl_pvals_logs_mat = np.array(rl_pvals_logs)
 
 		g_logs_names = ['g_loss', 'g_logit_diff', 'g_out_diff', 'g_param_diff']
 		d_r_logs_names = ['d_loss', 'd_param_diff', 'd_r_loss', 'r_logit_data', 'd_r_logit_diff', 'd_r_param_diff']
@@ -485,20 +535,32 @@ def train_baby_gan(baby, data_sampler):
 		plot_time_mat(stats_logs_mat, stats_logs_names, 1, log_path, itrs=itrs_logs)
 
 		### plot rl_vals **g_num**
-		plt.figure(0, figsize=(8, 6))
-		plt.clf()
+		fig, ax = plt.subplots(figsize=(8, 6))
+		ax.clear()
 		for g in range(baby.g_num):
-			plt.plot(itrs_logs, rl_vals_logs_mat[:, g], label='g_%d' % g)
-		plt.grid(True, which='both', linestyle='dotted')
-		plt.title('RL Returns')
-		plt.xlabel('Iterations')
-		plt.ylabel('Values')
-		plt.legend(loc=0)
-		plt.savefig(log_path+'/rl_returns.png', dpi=300)
+			ax.plot(itrs_logs, rl_vals_logs_mat[:, g], label='g_%d' % g)
+		ax.grid(True, which='both', linestyle='dotted')
+		ax.set_title('RL Q Values')
+		ax.set_xlabel('Iterations')
+		ax.set_ylabel('Values')
+		ax.legend(loc=0)
+		fig.savefig(log_path+'/rl_q_vals.png', dpi=300)
+		
+		### plot rl_pvals **g_num**
+		fig, ax = plt.subplots(figsize=(8, 6))
+		ax.clear()
+		for g in range(baby.g_num):
+			ax.plot(itrs_logs, rl_pvals_logs_mat[:, g], label='g_%d' % g)
+		ax.grid(True, which='both', linestyle='dotted')
+		ax.set_title('RL Policy')
+		ax.set_xlabel('Iterations')
+		ax.set_ylabel('Values')
+		ax.legend(loc=0)
+		fig.savefig(log_path+'/rl_policy.png', dpi=300)
 
 def eval_baby_gan(baby, data_sampler, itr):
 	### dataset definition
-	data_dim = len(centers[0])
+	data_dim = baby.data_dim
 	sample_size = 10000
 	r_samples = data_sampler(sample_size)
 		#generate_normal_data(sample_size, centers, stds, ratios)
@@ -517,17 +579,18 @@ def eval_baby_gan(baby, data_sampler, itr):
 	### get network stats
 	net_stats = baby.step(None, None, stats_only=True)
 
-	### draw samples
+	### draw samples **1d_datadim**
 	data_r = r_samples
 	data_g = g_samples
 	plot_dataset([data_r, data_g], color=['r', 'b'], pathname=log_path_data+'/data_%06d.png' % itr)
+	#plot_manifold_1d(baby, pathname=log_path_manifold+'/data_%06d.png' % itr)
 
 	return 2*rg_score - rr_score - gg_score, rg_score, net_stats
 
 
 if __name__ == '__main__':
 	'''
-	DATASET MAKING
+	DATASET MAKING **1d_datadim**
 	'''
 	centers = [[-1.0, 0.0], [1.0, 0.0], [0.0, 1.0], [0.0, -1.0]]
 	stds = [[0.02, 0.02], [0.02, 0.02], [0.02, 0.02], [0.02, 0.02]]
@@ -537,7 +600,8 @@ if __name__ == '__main__':
 	ratios = None
 	data_dim = 2
 
-	### function with data_size input that generates randomized training data
+	### function with data_size input that generates randomized training data **1d_datadim**
+	#data_sampler = generate_dot_data
 	data_sampler = generate_line_data
 	data_r = data_sampler(50000)
 	plot_dataset([data_r], color=['r'], pathname=log_path+'/real_dataset.png')
@@ -563,8 +627,8 @@ if __name__ == '__main__':
 	### train baby gan
 	train_baby_gan(baby, data_sampler)
 
-	### load ganist
-	#ganist.load(ganist_path)
+	### load baby
+	#baby.load(baby_path)
 
 	### eval baby gan
 	#e_dist, e_norm, net_stats = eval_baby_gan(baby, centers, stds)
