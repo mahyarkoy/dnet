@@ -129,26 +129,21 @@ def generate_dot_data(data_size):
 
 def plot_dataset(datasets, color, title='Dataset', pathname=None):
 	### plot the dataset
-	plt.figure(1,figsize=(8,6))
-	plt.clf()
+	fig, ax = plt.subplots(figsize=(8, 6))
+	ax.clear()
 	#plt.scatter(dataset[:,0], dataset[:,1], c=gt.astype(int))
 
 	for i, d in enumerate(datasets):
 		d = d.reshape([d.size, 1]) if len(d.shape) == 1 else d
 		if d.shape[-1] == 1:
 			d = np.c_[d, np.ones(d.shape)]
-		plt.scatter(d[:,0], d[:,1], c=color[i], marker='.')
-	plt.title(title)
-	ax = plt.gca()
-	#start, end = ax.get_xlim()
-	#start = np.floor(start)
-	#end = np.ceil(end)
-	#ax.xaxis.set_ticks(np.arange(start, end, 1.0))
+		ax.scatter(d[:,0], d[:,1], c=color[i], marker='.')
+	ax.set_title(title)
 	ax.set_xlim(-3, 3)
 	ax.set_ylim(-3, 3)
-	plt.grid(True, which='both', linestyle='dotted')
+	ax.grid(True, which='both', linestyle='dotted')
 	if pathname is not None:
-		plt.savefig(pathname, dpi=300)
+		fig.savefig(pathname, dpi=300)
 	return ax
 
 def plot_manifold_1d(baby, pathname=None, title='Generator Function'):
@@ -157,20 +152,15 @@ def plot_manifold_1d(baby, pathname=None, title='Generator Function'):
 	zi = np.linspace(-z_range, z_range, data_size)
 	data = sample_baby_gan(baby, data_size, zi_data=zi.reshape(data_size, 1))
 
-	plt.figure(1,figsize=(6,6))
-	plt.clf()
-	plt.plot(zi, data, 'b')
-	plt.title(title)
-	ax = plt.gca()
-	#start, end = ax.get_xlim()
-	#start = np.floor(start)
-	#end = np.ceil(end)
-	#ax.xaxis.set_ticks(np.arange(start, end, 1.0))
+	fig, ax = plt.subplots(figsize=(8, 6))
+	ax.clear()
+	ax.plot(zi, data, 'b')
+	ax.set_title(title)
 	ax.set_xlim(-1.5, 1.5)
 	ax.set_ylim(-4, 4)
-	plt.grid(True, which='both', linestyle='dotted')
+	ax.grid(True, which='both', linestyle='dotted')
 	if pathname is not None:
-		plt.savefig(pathname, dpi=300)
+		fig.savefig(pathname, dpi=300)
 	return ax
 	
 '''
@@ -324,19 +314,19 @@ def plot_field_1d(field_params, r_data, br_data, g_data, bg_data, fignum, save_p
 	fig.savefig(save_path, dpi=300)
 
 def plot_time_series(name, vals, fignum, save_path, color='b', ytype='linear', itrs=None):
-	plt.figure(fignum, figsize=(8, 6))
-	plt.clf()
+	fig, ax = plt.subplots(figsize=(8, 6))
+	ax.clear()
 	if itrs is None:
-		plt.plot(vals, color=color)	
+		ax.plot(vals, color=color)	
 	else:
-		plt.plot(itrs, vals, color=color)
-	plt.grid(True, which='both', linestyle='dotted')
-	plt.title(name)
-	plt.xlabel('Iterations')
-	plt.ylabel('Values')
+		ax.plot(itrs, vals, color=color)
+	ax.grid(True, which='both', linestyle='dotted')
+	ax.set_title(name)
+	ax.set_xlabel('Iterations')
+	ax.set_ylabel('Values')
 	if ytype=='log':
-		plt.yscale('log')
-	plt.savefig(save_path, dpi=300)
+		ax.set_yscale('log')
+	fig.savefig(save_path, dpi=300)
 
 def plot_time_mat(mat, mat_names, fignum, save_path, ytype=None, itrs=None):
 	for n in range(mat.shape[1]):
@@ -545,6 +535,7 @@ def train_baby_gan(baby, data_sampler):
 		ax.set_ylabel('Values')
 		ax.legend(loc=0)
 		fig.savefig(log_path+'/rl_q_vals.png', dpi=300)
+		plt.close(fig)
 		
 		### plot rl_pvals **g_num**
 		fig, ax = plt.subplots(figsize=(8, 6))
@@ -557,6 +548,7 @@ def train_baby_gan(baby, data_sampler):
 		ax.set_ylabel('Values')
 		ax.legend(loc=0)
 		fig.savefig(log_path+'/rl_policy.png', dpi=300)
+		plt.close(fig)
 
 def eval_baby_gan(baby, data_sampler, itr):
 	### dataset definition

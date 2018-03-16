@@ -47,9 +47,9 @@ class TFBabyGAN:
 		self.g_beta1 = 0.9
 		self.g_beta2 = 0.99
 		self.d_lr = 2e-4
-		self.d_beta1 = 0.9
-		self.d_beta2 = 0.99
-		self.e_lr = 2e-4
+		self.d_beta1 = 0.5
+		self.d_beta2 = 0.5
+		self.e_lr = 1e-3
 		self.e_beta1 = 0.9
 		self.e_beta2 = 0.99
 		self.pg_lr = 1e-2
@@ -68,7 +68,7 @@ class TFBabyGAN:
 		self.en_loss_weight = 1.0
 		self.rl_lr = 0.99
 		self.pg_q_lr = 0.99
-		self.pg_temp = 2.0
+		self.pg_temp = 1.0
 		self.g_rl_vals = 0. * np.ones(self.g_num, dtype=np_dtype)
 		self.g_rl_pvals = 0. * np.ones(self.g_num, dtype=np_dtype)
 		self.d_loss_type = 'log'
@@ -348,7 +348,7 @@ class TFBabyGAN:
 		with tf.control_dependencies([pg_q_opt, rl_counter_opt]):
 			pg_q_zu = tf.gather(self.pg_q, tf.reshape(self.z_input, [-1]))
 			pg_loss_total = -tf.reduce_mean(log_soft_policy * pg_q_zu) + \
-				100. * self.rl_counter * -self.gi_h
+				1000. * self.rl_counter * -self.gi_h
 
 		#self.pg_opt = tf.train.AdamOptimizer(
 		#		self.pg_lr, beta1=self.pg_beta1, beta2=self.pg_beta2).minimize(
