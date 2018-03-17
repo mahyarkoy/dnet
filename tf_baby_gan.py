@@ -43,15 +43,15 @@ class TFBabyGAN:
 		self.sess = sess
 
 		### optimization parameters
-		self.g_lr = 1e-3
-		self.g_beta1 = 0.9
-		self.g_beta2 = 0.99
+		self.g_lr = 2e-4
+		self.g_beta1 = 0.5
+		self.g_beta2 = 0.5
 		self.d_lr = 2e-4
 		self.d_beta1 = 0.5
 		self.d_beta2 = 0.5
-		self.e_lr = 1e-3
-		self.e_beta1 = 0.9
-		self.e_beta2 = 0.99
+		self.e_lr = 2e-4
+		self.e_beta1 = 0.5
+		self.e_beta2 = 0.5
 		self.pg_lr = 1e-2
 		self.pg_beta1 = 0.5
 		self.pg_beta2 = 0.5
@@ -185,7 +185,7 @@ class TFBabyGAN:
 
 		### e loss combination
 		self.en_loss_total = tf.reduce_mean(self.g_en_loss) + \
-			1. * self.r_en_h + 0.* -self.r_en_marg_hlb
+			0. * self.r_en_h + 0.* -self.r_en_marg_hlb
 
 		### collect params
 		self.g_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, "g_net")
