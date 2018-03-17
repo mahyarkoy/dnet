@@ -420,9 +420,10 @@ def train_baby_gan(baby, data_sampler):
 					stats_logs.append(net_stats)
 					itrs_logs.append(itr_total)
 					rl_vals_logs.append(list(baby.g_rl_vals))
-					z_pr = np.exp(baby.pg_temp * baby.g_rl_pvals)
-					z_pr = z_pr / np.sum(z_pr)
-					rl_pvals_logs.append(list(z_pr))
+					rl_pvals_logs.append(list(baby.g_rl_pvals))
+					#z_pr = np.exp(baby.pg_temp * baby.g_rl_pvals)
+					#z_pr = z_pr / np.sum(z_pr)
+					#rl_pvals_logs.append(list(z_pr))
 					### field plots
 					'''
 					g_data = sample_baby_gan(baby, field_sample_size)

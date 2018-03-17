@@ -60,7 +60,7 @@ class TFBabyGAN:
 		self.batch_size = 128
 		self.z_dim = 100
 		self.man_dim = 0
-		self.g_num = 10
+		self.g_num = 4
 		self.z_range = 1.0
 		self.data_dim = data_dim
 		self.mm_loss_weight = 0.0
@@ -362,8 +362,8 @@ class TFBabyGAN:
 			for gi in range(self.g_num):
 				with tf.variable_scope('gnum_%d' % gi):
 					### **g_num**
-					#zi = tf.random_uniform([tf.shape(z)[0], self.z_dim], 
-					#	minval=-self.z_range, maxval=self.z_range, dtype=tf_dtype)
+					zi = tf.random_uniform([tf.shape(z)[0], self.z_dim], 
+						minval=-self.z_range, maxval=self.z_range, dtype=tf_dtype)
 					bn = tf.contrib.layers.batch_norm
 			
 					### fully connected from hidden z 44128 to image shape
