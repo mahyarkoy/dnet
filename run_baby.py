@@ -127,7 +127,7 @@ def generate_dot_data(data_size):
 	data = np.random.choice([2., -2.], size=data_size, replace=True, p=[0.5, 0.5])
 	return data
 
-def plot_dataset(datasets, color, title='Dataset', pathname=None):
+def plot_dataset(datasets, color, pathname, title='Dataset'):
 	### plot the dataset
 	fig, ax = plt.subplots(figsize=(8, 6))
 	ax.clear()
@@ -142,11 +142,10 @@ def plot_dataset(datasets, color, title='Dataset', pathname=None):
 	ax.set_xlim(-3, 3)
 	ax.set_ylim(-3, 3)
 	ax.grid(True, which='both', linestyle='dotted')
-	if pathname is not None:
-		fig.savefig(pathname, dpi=300)
-	return ax
+	fig.savefig(pathname, dpi=300)
+	plt.close(fig)
 
-def plot_manifold_1d(baby, pathname=None, title='Generator Function'):
+def plot_manifold_1d(baby, pathname, title='Generator Function'):
 	data_size = 200
 	z_range = baby.z_range
 	zi = np.linspace(-z_range, z_range, data_size)
@@ -159,9 +158,8 @@ def plot_manifold_1d(baby, pathname=None, title='Generator Function'):
 	ax.set_xlim(-1.5, 1.5)
 	ax.set_ylim(-4, 4)
 	ax.grid(True, which='both', linestyle='dotted')
-	if pathname is not None:
-		fig.savefig(pathname, dpi=300)
-	return ax
+	fig.savefig(pathname, dpi=300)
+	plt.close(fig)
 	
 '''
 Plots generator 2D output data versus hidden z
@@ -327,6 +325,7 @@ def plot_time_series(name, vals, fignum, save_path, color='b', ytype='linear', i
 	if ytype=='log':
 		ax.set_yscale('log')
 	fig.savefig(save_path, dpi=300)
+	plt.close(fig)
 
 def plot_time_mat(mat, mat_names, fignum, save_path, ytype=None, itrs=None):
 	for n in range(mat.shape[1]):

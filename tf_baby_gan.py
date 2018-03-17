@@ -185,7 +185,7 @@ class TFBabyGAN:
 
 		### e loss combination
 		self.en_loss_total = tf.reduce_mean(self.g_en_loss) + \
-			0. * self.r_en_h + 0.* -self.r_en_marg_hlb
+			1. * self.r_en_h + 0.* -self.r_en_marg_hlb
 
 		### collect params
 		self.g_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, "g_net")
