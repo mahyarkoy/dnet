@@ -50,8 +50,8 @@ class TFBabyGAN:
 		self.d_beta1 = 0.5
 		self.d_beta2 = 0.5
 		self.e_lr = 2e-4
-		self.e_beta1 = 0.5
-		self.e_beta2 = 0.5
+		self.e_beta1 = 0.9
+		self.e_beta2 = 0.999
 		self.pg_lr = 1e-2
 		self.pg_beta1 = 0.5
 		self.pg_beta2 = 0.5
@@ -393,7 +393,8 @@ class TFBabyGAN:
 		with tf.variable_scope('e_net'):
 			with tf.variable_scope('encoder'):
 				flat = hidden_layer
-				flat = act(bn(dense(flat, 128, scope='fc', reuse=reuse), reuse=reuse, scope='bf1'))
+				flat = act(bn(dense(flat, 128, scope='fc', reuse=reuse), 
+					reuse=reuse, scope='bf1', is_training=train_phase))
 				o = dense(flat, self.g_num, scope='fco', reuse=reuse)
 				return o
 
@@ -408,7 +409,7 @@ class TFBabyGAN:
 		self.saver.restore(self.sess, fname)
 
 	def step(self, batch_data, batch_size, gen_update=False, 
-		dis_only=False, gen_only=False, stats_only=False, z_data=None, zi_data=None):
+		dis_only=False, gen_only=False, stats_only=False, en_only=False, z_data=None, zi_data=None):
 		batch_size = batch_data.shape[0] if batch_data is not None else batch_size
 		batch_data = batch_data.astype(np_dtype) if batch_data is not None else None
 		
@@ -427,6 +428,12 @@ class TFBabyGAN:
 			feed_dict = {self.im_input: batch_data, self.train_phase: False}
 			u_logits = self.sess.run(self.r_logits, feed_dict=feed_dict)
 			return u_logits.flatten()
+
+		### only forward discriminator on batch_data
+		if en_only:
+			feed_dict = {self.im_input: batch_data, self.train_phase: False}
+			en_logits = self.sess.run(self.r_en_logits, feed_dict=feed_dict)
+			return en_logits
 
 		### sample z from uniform (-1,1)
 		if zi_data is None:

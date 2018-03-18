@@ -145,6 +145,27 @@ def plot_dataset(datasets, color, pathname, title='Dataset'):
 	fig.savefig(pathname, dpi=300)
 	plt.close(fig)
 
+def plot_dataset_en(baby, dataset, color_map, pathname, title='Dataset'):
+	### plot the dataset
+	fig, ax = plt.subplots(figsize=(8, 6))
+	ax.clear()
+
+	d = dataset.reshape([dataset.size, 1]) if len(dataset.shape) == 1 else dataset
+	en_logits = eval_baby_en(baby, d)
+	cid = np.argmax(en_logits, axis=1)
+	if d.shape[-1] == 1:
+		d = np.c_[d, np.ones(d.shape)]
+	dec = ax.scatter(d[:,0], d[:,1], c=cid, cmap=color_map, 
+		marker='.', vmin=0, vmax=baby.g_num-1)
+
+	fig.colorbar(dec)
+	ax.set_title(title)
+	ax.set_xlim(-3, 3)
+	ax.set_ylim(-3, 3)
+	ax.grid(True, which='both', linestyle='dotted')
+	fig.savefig(pathname, dpi=300)
+	plt.close(fig)
+
 def plot_manifold_1d(baby, pathname, title='Generator Function'):
 	data_size = 200
 	z_range = baby.z_range
@@ -349,6 +370,24 @@ def sample_baby_gan(baby, sample_size, batch_size=512, z_data=None, zi_data=None
 	return g_samples
 
 '''
+Evaluate encoder logits on the given dataset.
+'''
+def eval_baby_en(baby, im_data, batch_size=512):
+	sample_size = im_data.shape[0]
+	en_logits = np.zeros([sample_size, baby.g_num])
+	for batch_start in range(0, sample_size, batch_size):
+		batch_end = batch_start + batch_size
+		batch_im = im_data[batch_start:batch_end, ...]
+		en_logits[batch_start:batch_end, ...] = \
+			baby.step(batch_im, None, en_only=True)
+	return en_logits
+
+def eval_dataset_en(baby, im_data, im_lable, batch_size=512):
+	en_logits = eval_baby_en(baby, im_data, batch_size)
+	acc = np.mean((np.argmax(en_logits, axis=1) - im_lable) == 0)
+	return acc
+
+'''
 Training Baby GAN
 '''
 def train_baby_gan(baby, data_sampler):
@@ -368,7 +407,7 @@ def train_baby_gan(baby, data_sampler):
 	g_max_itr = 2e4
 	d_updates = 5
 	g_updates = 1
-	batch_size = 128
+	batch_size = 32
 	eval_step = eval_int
 
 	### logs initi
@@ -380,6 +419,7 @@ def train_baby_gan(baby, data_sampler):
 	itrs_logs = list()
 	rl_vals_logs = list()
 	rl_pvals_logs = list()
+	en_acc_logs = list()
 
 	### training inits
 	d_itr = 0
@@ -424,6 +464,16 @@ def train_baby_gan(baby, data_sampler):
 					#z_pr = np.exp(baby.pg_temp * baby.g_rl_pvals)
 					#z_pr = z_pr / np.sum(z_pr)
 					#rl_pvals_logs.append(list(z_pr))
+					acc_array = np.zeros(baby.g_num)
+					sample_size = 1000
+					for g in range(baby.g_num):
+						z = g * np.ones(sample_size)
+						z = z.astype(np.int32)
+						g_samples = sample_baby_gan(baby, sample_size, z_data=z)
+						plot_dataset_en(baby, g_samples, 'tab10', 
+							pathname=log_path_manifold+'/data_%06d_g_%d.png' % (itr_total, g))
+						acc_array[g] = eval_dataset_en(baby, g_samples, z)
+					en_acc_logs.append(list(acc_array))
 					### field plots
 					'''
 					g_data = sample_baby_gan(baby, field_sample_size)
@@ -510,6 +560,7 @@ def train_baby_gan(baby, data_sampler):
 		stats_logs_mat = np.array(stats_logs)
 		rl_vals_logs_mat = np.array(rl_vals_logs)
 		rl_pvals_logs_mat = np.array(rl_pvals_logs)
+		en_acc_logs_mat = np.array(en_acc_logs)
 
 		g_logs_names = ['g_loss', 'g_logit_diff', 'g_out_diff', 'g_param_diff']
 		d_r_logs_names = ['d_loss', 'd_param_diff', 'd_r_loss', 'r_logit_data', 'd_r_logit_diff', 'd_r_param_diff']
@@ -550,6 +601,19 @@ def train_baby_gan(baby, data_sampler):
 		fig.savefig(log_path+'/rl_policy.png', dpi=300)
 		plt.close(fig)
 
+		### plot en_accs **g_num**
+		fig, ax = plt.subplots(figsize=(8, 6))
+		ax.clear()
+		for g in range(baby.g_num):
+			ax.plot(itrs_logs, en_acc_logs_mat[:, g], label='g_%d' % g)
+		ax.grid(True, which='both', linestyle='dotted')
+		ax.set_title('Encoder Accuracy')
+		ax.set_xlabel('Iterations')
+		ax.set_ylabel('Values')
+		ax.legend(loc=0)
+		fig.savefig(log_path+'/encoder_acc.png', dpi=300)
+		plt.close(fig)
+
 def eval_baby_gan(baby, data_sampler, itr):
 	### dataset definition
 	data_dim = baby.data_dim
@@ -574,7 +638,9 @@ def eval_baby_gan(baby, data_sampler, itr):
 	### draw samples **1d_datadim**
 	data_r = r_samples
 	data_g = g_samples
-	plot_dataset([data_r, data_g], color=['r', 'b'], pathname=log_path_data+'/data_%06d.png' % itr)
+	plot_dataset_en(baby, data_r, color_map='tab10', pathname=log_path_data+'/data_%06d_r.png' % itr)
+	plot_dataset_en(baby, data_g, color_map='tab10', pathname=log_path_data+'/data_%06d_g.png' % itr)
+	#plot_dataset([data_r, data_g], color=['r', 'b'], pathname=log_path_data+'/data_%06d.png' % itr)
 	#plot_manifold_1d(baby, pathname=log_path_manifold+'/data_%06d.png' % itr)
 
 	return 2*rg_score - rr_score - gg_score, rg_score, net_stats
