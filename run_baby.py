@@ -566,8 +566,8 @@ def train_baby_gan(baby, data_sampler):
 		d_r_logs_names = ['d_loss', 'd_param_diff', 'd_r_loss', 'r_logit_data', 'd_r_logit_diff', 'd_r_param_diff']
 		d_g_logs_names = ['d_g_loss', 'g_logit_data', 'd_g_logit_diff', 'd_g_param_diff']
 		eval_logs_names = ['energy_distance', 'energy_distance_norm']
-		stats_logs_names = ['nan_vars_ratio', 'inf_vars_ratio', 'tiny_vars_ratio', 
-							'big_vars_ratio', 'vars_count']
+		stats_logs_names = ['nan_vars', 'inf_vars', 'tiny_vars_ratio', 
+							'big_vars_ratio']
 
 		plot_time_mat(g_logs_mat, g_logs_names, 1, log_path)
 		plot_time_mat(d_r_logs_mat, d_r_logs_names, 1, log_path)
@@ -679,6 +679,9 @@ if __name__ == '__main__':
 	### init variables
 	sess.run(tf.global_variables_initializer())
 
+	with open(log_path+'/vars_count_log.txt', 'w+') as fs:
+		print >>fs, '>>> g_vars: %d --- d_vars: %d --- e_vars: %d' \
+			% (baby.g_vars_count, baby.d_vars_count, baby.e_vars_count)
 	'''
 	GAN SETUP
 	'''
@@ -691,6 +694,7 @@ if __name__ == '__main__':
 	### eval baby gan
 	#e_dist, e_norm, net_stats = eval_baby_gan(baby, centers, stds)
 	#with open(log_path+'/txt_logs.txt', 'w+') as fs:
+#		print >>fs, '>>> g_vars: %d --- d_vars: %d --- e_vars: %d' % (baby.g_vars_count, baby.d_vars_count, baby.e_vars_count)
 #		e_dist = 0 if e_dist < 0 else np.sqrt(e_dist)
 #		print >>fs, '>>> energy_distance: %f, energy_coef: %f' % (e_dist, e_dist/np.sqrt(2.0*e_norm))
 #		print >>fs, '>>> nan_vars: %f, inf_vars: %f, tiny_vars: %f, big_vars: %f, count_vars: %d' % tuple(net_stats)

@@ -52,7 +52,7 @@ class TFBabyGAN:
 		self.e_lr = 2e-4
 		self.e_beta1 = 0.9
 		self.e_beta2 = 0.999
-		self.pg_lr = 1e-2
+		self.pg_lr = 1e-3
 		self.pg_beta1 = 0.5
 		self.pg_beta2 = 0.5
 
@@ -67,7 +67,7 @@ class TFBabyGAN:
 		self.gp_loss_weight = 10.0
 		self.en_loss_weight = 1.0
 		self.rl_lr = 0.99
-		self.pg_q_lr = 0.99
+		self.pg_q_lr = 0.01
 		self.pg_temp = 1.0
 		self.g_rl_vals = 0. * np.ones(self.g_num, dtype=np_dtype)
 		self.g_rl_pvals = 0. * np.ones(self.g_num, dtype=np_dtype)
@@ -289,10 +289,20 @@ class TFBabyGAN:
 			self.big_vars += tf.reduce_sum(tf.cast(tf.square(v) > 1.0, tf_dtype))
 			self.count_vars += tf.reduce_prod(v.get_shape())
 		self.count_vars = tf.cast(self.count_vars, tf_dtype)
-		self.nan_vars /= self.count_vars 
-		self.inf_vars /= self.count_vars
+		#self.nan_vars /= self.count_vars
+		#self.inf_vars /= self.count_vars
 		self.zero_vars /= self.count_vars
 		self.big_vars /= self.count_vars
+
+		self.g_vars_count = 0
+		self.d_vars_count = 0
+		self.e_vars_count = 0
+		for v in self.g_vars:
+			self.g_vars_count += int(np.prod(v.get_shape()))
+		for v in self.d_vars:
+			self.d_vars_count += int(np.prod(v.get_shape()))
+		for v in self.e_vars:
+			self.e_vars_count += int(np.prod(v.get_shape()))
 
 		### build optimizers
 		update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
@@ -341,20 +351,26 @@ class TFBabyGAN:
 		rl_counter_opt = tf.assign(self.rl_counter, self.rl_counter * 0.999)
 		
 		### r_en_logits as q values
-		pg_q_opt = tf.assign(self.pg_q, self.pg_q_lr*self.pg_q + \
-			(1-self.pg_q_lr) * pg_reward)
+		pg_q_opt = tf.assign(self.pg_q, (1-self.pg_q_lr)*self.pg_q + \
+			self.pg_q_lr * pg_reward)
+
+		### cross entropy E_x H(p(c|x)||q(c))
+		with tf.control_dependencies([pg_q_opt, rl_counter_opt]):
+			en_pr = tf.nn.softmax(self.r_en_logits)
+			pg_loss_total = -tf.reduce_mean(en_pr * tf.nn.log_softmax(self.pg_var)) \
+				- 1000. * self.rl_counter * self.gi_h			
 
 		### actor update (p values update)
-		with tf.control_dependencies([pg_q_opt, rl_counter_opt]):
-			pg_q_zu = tf.gather(self.pg_q, tf.reshape(self.z_input, [-1]))
-			pg_loss_total = -tf.reduce_mean(log_soft_policy * pg_q_zu) + \
-				1000. * self.rl_counter * -self.gi_h
+		#with tf.control_dependencies([pg_q_opt, rl_counter_opt]):
+		#	pg_q_zu = tf.gather(self.pg_q, tf.reshape(self.z_input, [-1]))
+		#	pg_loss_total = -tf.reduce_mean(log_soft_policy * pg_q_zu) + \
+		#		1000. * self.rl_counter * -self.gi_h
 
-		#self.pg_opt = tf.train.AdamOptimizer(
-		#		self.pg_lr, beta1=self.pg_beta1, beta2=self.pg_beta2).minimize(
-		#		pg_loss_total, var_list=[self.pg_var])
-		self.pg_opt = tf.train.GradientDescentOptimizer(self.pg_lr).minimize(
-			pg_loss_total, var_list=[self.pg_var])
+		self.pg_opt = tf.train.AdamOptimizer(
+				self.pg_lr, beta1=self.pg_beta1, beta2=self.pg_beta2).minimize(
+				pg_loss_total, var_list=[self.pg_var])
+		#self.pg_opt = tf.train.GradientDescentOptimizer(self.pg_lr).minimize(
+		#	pg_loss_total, var_list=[self.pg_var])
 
 	def build_gen(self, z, zi, act, train_phase):
 		ol = list()
@@ -415,7 +431,7 @@ class TFBabyGAN:
 		
 		### inf, nans, tiny and big vars stats
 		if stats_only:
-			res_list = [self.nan_vars, self.inf_vars, self.zero_vars, self.big_vars, self.count_vars]
+			res_list = [self.nan_vars, self.inf_vars, self.zero_vars, self.big_vars]
 			res_list = self.sess.run(res_list, feed_dict={})
 			return res_list
 
