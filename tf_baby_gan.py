@@ -60,7 +60,7 @@ class TFBabyGAN:
 		self.batch_size = 128
 		self.z_dim = 100
 		self.man_dim = 0
-		self.g_num = 4
+		self.g_num = 10
 		self.z_range = 1.0
 		self.data_dim = data_dim
 		self.mm_loss_weight = 0.0
@@ -71,8 +71,8 @@ class TFBabyGAN:
 		self.pg_temp = 1.0
 		self.g_rl_vals = 0. * np.ones(self.g_num, dtype=np_dtype)
 		self.g_rl_pvals = 0. * np.ones(self.g_num, dtype=np_dtype)
-		self.d_loss_type = 'log'
-		self.g_loss_type = 'mod'
+		self.d_loss_type = 'was'
+		self.g_loss_type = 'was'
 		#self.d_act = tf.tanh
 		#self.g_act = tf.tanh
 		self.d_act = lrelu
@@ -129,17 +129,13 @@ class TFBabyGAN:
 		### NaN free norm gradient
 		rg_grad = tf.gradients(self.rg_logits, rg_layer)
 		rg_grad_flat = tf.reshape(rg_grad, [-1, np.prod(self.data_dim)])
-		rg_grad_ok = tf.reduce_sum(tf.square(rg_grad_flat), axis=1) > 0.
+		rg_grad_ok = tf.reduce_sum(tf.square(rg_grad_flat), axis=1) > 1.
 		rg_grad_safe = tf.where(rg_grad_ok, rg_grad_flat, tf.ones_like(rg_grad_flat))
-		rg_grad_abs = tf.where(rg_grad_flat >= 0., rg_grad_flat, -rg_grad_flat)
+		#rg_grad_abs = tf.where(rg_grad_flat >= 0., rg_grad_flat, -rg_grad_flat)
+		rg_grad_abs = 0. * rg_grad_flat
 		rg_grad_norm = tf.where(rg_grad_ok, 
 			tf.norm(rg_grad_safe, axis=1), tf.reduce_sum(rg_grad_abs, axis=1))
 		gp_loss = tf.square(rg_grad_norm - 1.0)
-
-		### generated encoder loss given z_input has generator ids **g_num**
-		self.g_en_loss = tf.nn.softmax_cross_entropy_with_logits(
-			labels=tf.one_hot(tf.reshape(self.z_input, [-1]), self.g_num, dtype=tf_dtype), 
-			logits=self.g_en_logits)
 
 		### d loss combination **g_num**
 		self.d_loss_mean = tf.reduce_mean(self.d_r_loss + self.d_g_loss)
@@ -383,8 +379,8 @@ class TFBabyGAN:
 					bn = tf.contrib.layers.batch_norm
 			
 					### fully connected from hidden z 44128 to image shape
-					h1 = act(bn(dense(zi, 128//4, scope='fc1')))
-					h2 = act(bn(dense(h1, 64//4, scope='fc2')))
+					h1 = act(dense(zi, 128, scope='fc1'))
+					h2 = act(dense(h1, 64, scope='fc2'))
 					h3 = dense(h2, self.data_dim, scope='fco')
 					
 					### output activation to bring data values in (-1,1)
@@ -425,7 +421,8 @@ class TFBabyGAN:
 		self.saver.restore(self.sess, fname)
 
 	def step(self, batch_data, batch_size, gen_update=False, 
-		dis_only=False, gen_only=False, stats_only=False, en_only=False, z_data=None, zi_data=None):
+		dis_only=False, gen_only=False, stats_only=False, 
+		en_only=False, z_data=None, zi_data=None):
 		batch_size = batch_data.shape[0] if batch_data is not None else batch_size
 		batch_data = batch_data.astype(np_dtype) if batch_data is not None else None
 		
@@ -445,7 +442,7 @@ class TFBabyGAN:
 			u_logits = self.sess.run(self.r_logits, feed_dict=feed_dict)
 			return u_logits.flatten()
 
-		### only forward discriminator on batch_data
+		### only forward encoder on batch_data
 		if en_only:
 			feed_dict = {self.im_input: batch_data, self.train_phase: False}
 			en_logits = self.sess.run(self.r_en_logits, feed_dict=feed_dict)
@@ -467,13 +464,14 @@ class TFBabyGAN:
 		zi_data = zi_data.astype(np_dtype)
 
 		### multiple generator uses z_data to select gen **g_num**
+		self.g_rl_vals, self.g_rl_pvals = self.sess.run((self.pg_q, self.pg_var), feed_dict={})
 		if z_data is None:
 			#g_th = min(1 + self.rl_counter // 1000, self.g_num)
-			#g_th = self.g_num
-			#z_pr = np.exp(self.pg_temp * self.g_rl_pvals[:g_th])
-			#z_pr = z_pr / np.sum(z_pr)
-			#z_data = np.random.choice(g_th, size=batch_size, p=z_pr)
-			z_data = np.random.randint(low=0, high=self.g_num, size=batch_size)
+			g_th = self.g_num
+			z_pr = np.exp(self.pg_temp * self.g_rl_pvals[:g_th])
+			z_pr = z_pr / np.sum(z_pr)
+			z_data = np.random.choice(g_th, size=batch_size, p=z_pr)
+			#z_data = np.random.randint(low=0, high=self.g_num, size=batch_size)
 
 		#z_data = z_data.astype(np_dtype)
 
@@ -499,7 +497,7 @@ class TFBabyGAN:
 				self.d_g_logs, self.g_opt, self.e_opt, self.pg_opt]
 				#self.r_en_h, self.r_en_marg_hlb, self.gi_h, self.g_en_loss, self.rl_counter]
 			res_list = self.sess.run(res_list, feed_dict=feed_dict)
-			self.g_rl_vals, self.g_rl_pvals = self.sess.run((self.pg_q, self.pg_var), feed_dict={})
+			#self.g_rl_vals, self.g_rl_pvals = self.sess.run((self.pg_q, self.pg_var), feed_dict={})
 			#print '>>> rl_counter: ', res_list[-1]
 			### RL value updates
 			#self.g_rl_vals[z_data] += (1-self.rl_lr) * \

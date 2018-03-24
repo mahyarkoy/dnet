@@ -30,6 +30,7 @@ import matplotlib.tri as mtri
 from sklearn.neighbors.kde import KernelDensity
 import argparse
 print matplotlib.get_backend()
+import scipy.stats as sc_stats
 
 arg_parser = argparse.ArgumentParser()
 arg_parser.add_argument('-l', '--log-path', dest='log_path', required=True, help='log directory to store logs.')
@@ -44,6 +45,7 @@ np.random.seed(run_seed)
 tf.set_random_seed(run_seed)
 
 import tf_baby_gan
+import vee_gan
 
 log_path_png = log_path+'/fields'
 log_path_snap = log_path+'/snapshots'
@@ -93,19 +95,34 @@ def generate_struct_data(data_size, lb, ub, std):
 	return dataset, np.array(labels)
 
 def generate_circle_data(data_size):
+	num_comp = 2
 	z = np.random.uniform(0.0, 2*np.pi, data_size)
-	x = np.sin(z)
-	y = np.cos(z)
-	dataset = np.c_[x,y]
-	return dataset, np.ones(dataset.shape[0])
+	ch = np.random.choice(num_comp, size=data_size, replace=True, p=[0.5, 0.5])
+	
+	x1 = np.sin(z) - 2
+	y1 = np.cos(z)
+
+	x2 = np.sin(z) + 2
+	y2 = np.cos(z)
+
+	dx = np.c_[x1, x2]
+	dy = np.c_[y1, y2]
+
+	data = np.c_[dx[np.arange(data_size), ch], dy[np.arange(data_size), ch]]
+	return data
 
 def generate_line_data(data_size):
 	num_lines = 4
-	z = np.random.uniform(0.0, 1.0, data_size)
+	lb = 0.
+	ub = 1.
+	z = np.random.uniform(lb, ub, data_size)
+	mu, sig = 0.5, 0.2
+	z_n = sc_stats.truncnorm((lb-mu)/sig, (ub-mu)/sig, loc=mu, scale=sig).rvs(data_size)
 	#ch = np.random.randint(0, num_lines, data_size)
 	ch = np.random.choice(num_lines, size=data_size, replace=True, p=[0.25, 0.25, 0.25, 0.25])
 	
 	x1 = z * .25 + (1-z) * .75
+	x1_n = z_n * .25 + (1-z_n) * .75
 	y1 = -1. * x1 + 1.
 	
 	x2 = -x1 
@@ -114,7 +131,7 @@ def generate_line_data(data_size):
 	x3 = x1
 	y3 = 1. * x3 - 1.
 
-	x4 = x2
+	x4 = -x1
 	y4 = 1. * x4 + 1.
 
 	dx = np.c_[x1, x2, x3, x4]
@@ -127,7 +144,7 @@ def generate_dot_data(data_size):
 	data = np.random.choice([2., -2.], size=data_size, replace=True, p=[0.5, 0.5])
 	return data
 
-def plot_dataset(datasets, color, pathname, title='Dataset'):
+def plot_dataset(datasets, color, pathname, title='Dataset', fov=3):
 	### plot the dataset
 	fig, ax = plt.subplots(figsize=(8, 6))
 	ax.clear()
@@ -139,13 +156,13 @@ def plot_dataset(datasets, color, pathname, title='Dataset'):
 			d = np.c_[d, np.ones(d.shape)]
 		ax.scatter(d[:,0], d[:,1], c=color[i], marker='.')
 	ax.set_title(title)
-	ax.set_xlim(-3, 3)
-	ax.set_ylim(-3, 3)
+	ax.set_xlim(-fov, fov)
+	ax.set_ylim(-fov, fov)
 	ax.grid(True, which='both', linestyle='dotted')
 	fig.savefig(pathname, dpi=300)
 	plt.close(fig)
 
-def plot_dataset_en(baby, dataset, color_map, pathname, title='Dataset'):
+def plot_dataset_en(baby, dataset, color_map, pathname, title='Dataset', fov=3, color_bar=True):
 	### plot the dataset
 	fig, ax = plt.subplots(figsize=(8, 6))
 	ax.clear()
@@ -158,10 +175,11 @@ def plot_dataset_en(baby, dataset, color_map, pathname, title='Dataset'):
 	dec = ax.scatter(d[:,0], d[:,1], c=cid, cmap=color_map, 
 		marker='.', vmin=0, vmax=baby.g_num-1)
 
-	fig.colorbar(dec)
+	if color_bar is True:
+		fig.colorbar(dec)
 	ax.set_title(title)
-	ax.set_xlim(-3, 3)
-	ax.set_ylim(-3, 3)
+	ax.set_xlim(-fov, fov)
+	ax.set_ylim(-fov, fov)
 	ax.grid(True, which='both', linestyle='dotted')
 	fig.savefig(pathname, dpi=300)
 	plt.close(fig)
@@ -202,7 +220,7 @@ def plot_manifold(baby, batch_size, fignum, save_path, title, fov=1.0):
 	#XX = np.sin(2*np.pi*ZZ)
 	#YY = np.cos(2*np.pi*ZZ)
 	### plot the 3d manifold
-	fig = plt.figure(fignum, figsize=(6, 8))
+	fig = plt.figure(fignum, figsize=(8, 6))
 	fig.clf()
 	ax = fig.add_subplot(1, 1, 1, projection='3d')
 	ax.plot(XX, YY, ZZ, zdir='z', c='b', linewidth=3)
@@ -405,7 +423,7 @@ def train_baby_gan(baby, data_sampler):
 	### training configs
 	max_itr_total = 5e5
 	g_max_itr = 2e4
-	d_updates = 5
+	d_updates = 1
 	g_updates = 1
 	batch_size = 32
 	eval_step = eval_int
@@ -464,16 +482,19 @@ def train_baby_gan(baby, data_sampler):
 					#z_pr = np.exp(baby.pg_temp * baby.g_rl_pvals)
 					#z_pr = z_pr / np.sum(z_pr)
 					#rl_pvals_logs.append(list(z_pr))
+					
+					### en_accuracy plots **g_num** **vee**
 					acc_array = np.zeros(baby.g_num)
 					sample_size = 1000
 					for g in range(baby.g_num):
 						z = g * np.ones(sample_size)
 						z = z.astype(np.int32)
 						g_samples = sample_baby_gan(baby, sample_size, z_data=z)
-						plot_dataset_en(baby, g_samples, 'tab10', 
-							pathname=log_path_manifold+'/data_%06d_g_%d.png' % (itr_total, g))
+					#	plot_dataset_en(baby, g_samples, 'tab10', 
+					#		pathname=log_path_manifold+'/data_%06d_g_%d.png' % (itr_total, g))
 						acc_array[g] = eval_dataset_en(baby, g_samples, z)
 					en_acc_logs.append(list(acc_array))
+					
 					### field plots
 					'''
 					g_data = sample_baby_gan(baby, field_sample_size)
@@ -635,7 +656,7 @@ def eval_baby_gan(baby, data_sampler, itr):
 	### get network stats
 	net_stats = baby.step(None, None, stats_only=True)
 
-	### draw samples **1d_datadim**
+	### draw samples **1d_datadim** **g_num** **vee**
 	data_r = r_samples
 	data_g = g_samples
 	plot_dataset_en(baby, data_r, color_map='tab10', pathname=log_path_data+'/data_%06d_r.png' % itr)
@@ -661,6 +682,7 @@ if __name__ == '__main__':
 	### function with data_size input that generates randomized training data **1d_datadim**
 	#data_sampler = generate_dot_data
 	data_sampler = generate_line_data
+	#data_sampler = generate_circle_data
 	data_r = data_sampler(50000)
 	plot_dataset([data_r], color=['r'], pathname=log_path+'/real_dataset.png')
 
@@ -673,8 +695,8 @@ if __name__ == '__main__':
 	
 	### get a babygan instance
 	baby = tf_baby_gan.TFBabyGAN(sess, data_dim)
+	#baby = vee_gan.VEEGAN(sess, data_dim)
 	#baby = baby_gan.BabyGAN(data_dim)
-	#baby = tf_baby_gan.TFBabyGAN(data_dim)
 	
 	### init variables
 	sess.run(tf.global_variables_initializer())
@@ -689,7 +711,15 @@ if __name__ == '__main__':
 	train_baby_gan(baby, data_sampler)
 
 	### load baby
+	#baby_path = '/media/evl/Public/Mahyar/dnet_logs/logs_27/run_0/snapshots/model_83333_500000.h5'
+	#baby_path = '/media/evl/Public/Mahyar/ganist_logs/temp/logs_4l7ub_was_gset1_gpc1/run_0/snapshots/model_83333_500000.h5'
 	#baby.load(baby_path)
+
+	### generate sample draw
+	#sample_size = 10000
+	#data_g = sample_baby_gan(baby, sample_size)
+	plot_dataset([data_g], color=['b'], pathname=log_path+'/gen_dataset.png', fov=2)
+	#plot_dataset_en(baby, data_g, color_map='tab10', pathname=log_path+'/gen_dataset.png', fov=2, color_bar=False)
 
 	### eval baby gan
 	#e_dist, e_norm, net_stats = eval_baby_gan(baby, centers, stds)
@@ -698,38 +728,3 @@ if __name__ == '__main__':
 #		e_dist = 0 if e_dist < 0 else np.sqrt(e_dist)
 #		print >>fs, '>>> energy_distance: %f, energy_coef: %f' % (e_dist, e_dist/np.sqrt(2.0*e_norm))
 #		print >>fs, '>>> nan_vars: %f, inf_vars: %f, tiny_vars: %f, big_vars: %f, count_vars: %d' % tuple(net_stats)
-
-	
-
-
-
-
-
-
-
-		
-	
-		
-		
-	
-	
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
