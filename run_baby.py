@@ -423,7 +423,7 @@ def train_baby_gan(baby, data_sampler):
 	### training configs
 	max_itr_total = 5e5
 	g_max_itr = 2e4
-	d_updates = 1
+	d_updates = 5
 	g_updates = 1
 	batch_size = 32
 	eval_step = eval_int
