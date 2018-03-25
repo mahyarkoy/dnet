@@ -200,31 +200,27 @@ class VEEGAN:
 		with tf.variable_scope('g_net'):
 			bn = tf.contrib.layers.batch_norm
 			### fully connected from hidden z 44128 to image shape
-			h1 = act(bn(dense(zi, 128, scope='fc1')))
-			h2 = act(bn(dense(h1, 64, scope='fc2')))
+			h1 = act(dense(zi, 128, scope='fc1'))
+			h2 = act(dense(h1, 64, scope='fc2'))
 			o = dense(h2, self.data_dim, scope='fco')
 			return o
 
 	def build_dis(self, data_layer, z_layer, act, train_phase, reuse=False):
 		bn = tf.contrib.layers.batch_norm
 		with tf.variable_scope('d_net'):
-			h1 = act(dense(data_layer, 64, scope='fc1', reuse=reuse))
-			h2 = act(bn(dense(h1, 128, scope='fc2', reuse=reuse), 
-				reuse=reuse, scope='bf2'))
-			h2_flat = tf.contrib.layers.flatten(h2)
-			concat = tf.concat([h2_flat, z_layer], axis=1)
-			h3 = act(dense(concat, 128, scope='fc3', reuse=reuse))
-			o = dense(h3, 1, scope='fco', reuse=reuse)
+			data_flat = tf.contrib.layers.flatten(data_layer)
+			concat = tf.concat([data_flat, z_layer], axis=1)
+			h1 = act(dense(concat, 64, scope='fc1', reuse=reuse))
+			h2 = act(dense(h1, 128, scope='fc2', reuse=reuse))
+			o = dense(h2, 1, scope='fco', reuse=reuse)
 			return o
 
 	def build_encoder(self, data_layer, act, train_phase, reuse=False):
 		bn = tf.contrib.layers.batch_norm
 		with tf.variable_scope('e_net'):
-			h1 = act(bn(dense(data_layer, 64, scope='fc1', reuse=reuse), 
-				reuse=reuse, scope='bf1'))
-			h2 = act(bn(dense(h1, 128, scope='fc2', reuse=reuse), 
-				reuse=reuse, scope='bf2'))
-			o = dense(h2, 100, scope='fco', reuse=reuse)
+			h1 = act(dense(data_layer, 64, scope='fc1', reuse=reuse))
+			h2 = act(dense(h1, 128, scope='fc2', reuse=reuse))
+			o = dense(h2, self.z_dim, scope='fco', reuse=reuse)
 			return o
 
 	def start_session(self):

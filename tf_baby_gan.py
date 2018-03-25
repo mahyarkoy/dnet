@@ -379,8 +379,8 @@ class TFBabyGAN:
 					bn = tf.contrib.layers.batch_norm
 			
 					### fully connected from hidden z 44128 to image shape
-					h1 = act(dense(zi, 128, scope='fc1'))
-					h2 = act(dense(h1, 64, scope='fc2'))
+					h1 = act(dense(zi, 128//4, scope='fc1'))
+					h2 = act(dense(h1, 64//4, scope='fc2'))
 					h3 = dense(h2, self.data_dim, scope='fco')
 					
 					### output activation to bring data values in (-1,1)

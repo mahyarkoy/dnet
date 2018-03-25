@@ -388,7 +388,7 @@ def sample_baby_gan(baby, sample_size, batch_size=512, z_data=None, zi_data=None
 	return g_samples
 
 '''
-Evaluate encoder logits on the given dataset.
+Evaluate encoder logits on the given dataset. **g_num**
 '''
 def eval_baby_en(baby, im_data, batch_size=512):
 	sample_size = im_data.shape[0]
@@ -400,6 +400,9 @@ def eval_baby_en(baby, im_data, batch_size=512):
 			baby.step(batch_im, None, en_only=True)
 	return en_logits
 
+'''
+Compute the accuracy of encoder network over generator ids **g_num**
+'''
 def eval_dataset_en(baby, im_data, im_lable, batch_size=512):
 	en_logits = eval_baby_en(baby, im_data, batch_size)
 	acc = np.mean((np.argmax(en_logits, axis=1) - im_lable) == 0)
@@ -420,7 +423,7 @@ def train_baby_gan(baby, data_sampler):
 	g_manifold = 0
 	field_sample_size = 1000
 
-	### training configs
+	### training configs **vee** **g_num**
 	max_itr_total = 5e5
 	g_max_itr = 2e4
 	d_updates = 5
@@ -693,7 +696,7 @@ if __name__ == '__main__':
 	config = tf.ConfigProto(allow_soft_placement=True, gpu_options=gpu_options)
 	sess = tf.Session(config=config)
 	
-	### get a babygan instance
+	### get a babygan instance **vee**
 	baby = tf_baby_gan.TFBabyGAN(sess, data_dim)
 	#baby = vee_gan.VEEGAN(sess, data_dim)
 	#baby = baby_gan.BabyGAN(data_dim)
@@ -716,8 +719,8 @@ if __name__ == '__main__':
 	#baby.load(baby_path)
 
 	### generate sample draw
-	#sample_size = 10000
-	#data_g = sample_baby_gan(baby, sample_size)
+	sample_size = 10000
+	data_g = sample_baby_gan(baby, sample_size)
 	plot_dataset([data_g], color=['b'], pathname=log_path+'/gen_dataset.png', fov=2)
 	#plot_dataset_en(baby, data_g, color_map='tab10', pathname=log_path+'/gen_dataset.png', fov=2, color_bar=False)
 
