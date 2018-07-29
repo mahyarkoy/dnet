@@ -166,7 +166,7 @@ def plot_dataset(datasets, color, pathname, title='Dataset', fov=2):
 def plot_dataset_gid(baby, data_size, color_map, pathname, fov=2):
 	g_num = baby.g_num
 	cmap = mat_cm.get_cmap(color_map)
-	rgb_colors = cmap(1.0 * np.arange(baby.g_num) / baby.g_num)
+	rgb_colors = cmap(1.0 * np.arange(baby.g_num) / (baby.g_num-1))
 	rgb_colors[:,3] = 0.2
 	g_data = list()
 	for i in range(g_num):
