@@ -2,7 +2,7 @@
 set -e
 pfname=$1
 target=$2
-eval_step=10000
+eval_step=500
 mkdir -p $pfname
 mkdir -p $target
 

@@ -60,7 +60,7 @@ class TFBabyGAN:
 		self.batch_size = 128
 		self.z_dim = 100
 		self.man_dim = 0
-		self.g_num = 10
+		self.g_num = 2
 		self.z_range = 1.0
 		self.data_dim = data_dim
 		self.mm_loss_weight = 0.0
@@ -467,11 +467,11 @@ class TFBabyGAN:
 		self.g_rl_vals, self.g_rl_pvals = self.sess.run((self.pg_q, self.pg_var), feed_dict={})
 		if z_data is None:
 			#g_th = min(1 + self.rl_counter // 1000, self.g_num)
-			g_th = self.g_num
-			z_pr = np.exp(self.pg_temp * self.g_rl_pvals[:g_th])
-			z_pr = z_pr / np.sum(z_pr)
-			z_data = np.random.choice(g_th, size=batch_size, p=z_pr)
-			#z_data = np.random.randint(low=0, high=self.g_num, size=batch_size)
+			#g_th = self.g_num
+			#z_pr = np.exp(self.pg_temp * self.g_rl_pvals[:g_th])
+			#z_pr = z_pr / np.sum(z_pr)
+			#z_data = np.random.choice(g_th, size=batch_size, p=z_pr)
+			z_data = np.random.randint(low=0, high=self.g_num, size=batch_size)
 
 		#z_data = z_data.astype(np_dtype)
 

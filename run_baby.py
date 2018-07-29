@@ -32,6 +32,7 @@ import argparse
 print matplotlib.get_backend()
 import scipy.stats as sc_stats
 import matplotlib.cm as mat_cm
+import cPickle as pk
 
 arg_parser = argparse.ArgumentParser()
 arg_parser.add_argument('-l', '--log-path', dest='log_path', required=True, help='log directory to store logs.')
@@ -424,6 +425,20 @@ def eval_dataset_en(baby, im_data, im_lable, batch_size=512):
 	return acc
 
 '''
+1d data: mean and std of samples
+'''
+def eval_dataset_stat(baby, batch_size=512):
+	g_mean = list()
+	g_std = list()
+	sample_size = 1000
+	for i in range(baby.g_num):
+		z = i * np.ones(sample_size)
+		g_data = sample_baby_gan(baby, sample_size, z_data=z)
+		g_mean.append(np.mean(g_data))
+		g_std.append(np.std(g_data))
+	return g_mean, g_std
+
+'''
 Training Baby GAN
 '''
 def train_baby_gan(baby, data_sampler):
@@ -456,6 +471,8 @@ def train_baby_gan(baby, data_sampler):
 	rl_vals_logs = list()
 	rl_pvals_logs = list()
 	en_acc_logs = list()
+	g_mean_logs = list()
+	g_std_logs = list()
 
 	### training inits
 	d_itr = 0
@@ -523,6 +540,9 @@ def train_baby_gan(baby, data_sampler):
 						'DIS_%d_%d_%d' % (d_itr%d_updates, g_itr, itr_total), 
 						r_data=r_data, g_data=g_data)
 					'''
+					g_mean, g_std = eval_dataset_stat(baby)
+					g_mean_logs.append(g_mean)
+					g_std_logs.append(g_std)
 
 				### discriminator update
 				if d_update_flag is True:
@@ -600,6 +620,8 @@ def train_baby_gan(baby, data_sampler):
 		rl_vals_logs_mat = np.array(rl_vals_logs)
 		rl_pvals_logs_mat = np.array(rl_pvals_logs)
 		en_acc_logs_mat = np.array(en_acc_logs)
+		g_mean_logs_mat = np.array(g_mean_logs)
+		g_std_logs_mat = np.array(g_std_logs)
 
 		g_logs_names = ['g_loss', 'g_logit_diff', 'g_out_diff', 'g_param_diff']
 		d_r_logs_names = ['d_loss', 'd_param_diff', 'd_r_loss', 'r_logit_data', 'd_r_logit_diff', 'd_r_param_diff']
@@ -653,7 +675,29 @@ def train_baby_gan(baby, data_sampler):
 		fig.savefig(log_path+'/encoder_acc.png', dpi=300)
 		plt.close(fig)
 
+		### plot g_stat_1d
+		fig, ax = plt.subplots(figsize=(8, 6))
+		ax.clear()
+		for g in range(baby.g_num):
+			ax.errorbar(itrs_logs, g_mean_logs_mat[:, g], yerr=g_std_logs_mat[:,g], label='g_%d' % g,
+				capsize=2, marker='.', linestyle='--')
+		ax.grid(True, which='both', linestyle='dotted')
+		ax.set_title('Generator(s)')
+		ax.set_xlabel('Iterations')
+		ax.set_ylabel('Values')
+		ax.legend(loc=0)
+		fig.savefig(log_path+'/gen_stat_samples.png', dpi=300)
+		plt.close(fig)
+		### save g_stat_1d
+		with open(log_path+'/gen_stat_samples.cpk', 'wb+') as fs:
+			pk.dump([itrs_logs, g_mean_logs_mat, g_std_logs_mat], fs)
+
+
 def eval_baby_gan(baby, data_sampler, itr):
+	### get network stats
+	net_stats = baby.step(None, None, stats_only=True)
+	return 0, 0, net_stats
+
 	### dataset definition
 	data_dim = baby.data_dim
 	sample_size = 10000
@@ -696,11 +740,11 @@ if __name__ == '__main__':
 	#stds = [[0.01, 0.01], [0.01, 0.01], [0.01, 0.01], [0.01, 0.01]]
 	#ratios = [0.2, 0.2, 0.4, 0.2]
 	ratios = None
-	data_dim = 2
+	data_dim = 1
 
 	### function with data_size input that generates randomized training data **1d_datadim**
-	#data_sampler = generate_dot_data
-	data_sampler = generate_line_data
+	data_sampler = generate_dot_data
+	#data_sampler = generate_line_data
 	#data_sampler = generate_circle_data
 	data_r = data_sampler(50000)
 	plot_dataset([data_r], color=['r'], pathname=log_path+'/real_dataset.png')
