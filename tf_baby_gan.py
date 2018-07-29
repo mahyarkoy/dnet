@@ -412,7 +412,7 @@ class TFBabyGAN:
 
 	def start_session(self):
 		self.saver = tf.train.Saver(tf.global_variables(), 
-			keep_checkpoint_every_n_hours=1, max_to_keep=5)
+			keep_checkpoint_every_n_hours=0.5, max_to_keep=20)
 
 	def save(self, fname):
 		self.saver.save(self.sess, fname)

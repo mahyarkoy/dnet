@@ -31,6 +31,7 @@ from sklearn.neighbors.kde import KernelDensity
 import argparse
 print matplotlib.get_backend()
 import scipy.stats as sc_stats
+import matplotlib.cm as mat_cm
 
 arg_parser = argparse.ArgumentParser()
 arg_parser.add_argument('-l', '--log-path', dest='log_path', required=True, help='log directory to store logs.')
@@ -144,7 +145,7 @@ def generate_dot_data(data_size):
 	data = np.random.choice([2., -2.], size=data_size, replace=True, p=[0.5, 0.5])
 	return data
 
-def plot_dataset(datasets, color, pathname, title='Dataset', fov=3):
+def plot_dataset(datasets, color, pathname, title='Dataset', fov=2):
 	### plot the dataset
 	fig, ax = plt.subplots(figsize=(8, 6))
 	ax.clear()
@@ -154,7 +155,7 @@ def plot_dataset(datasets, color, pathname, title='Dataset', fov=3):
 		d = d.reshape([d.size, 1]) if len(d.shape) == 1 else d
 		if d.shape[-1] == 1:
 			d = np.c_[d, np.ones(d.shape)]
-		ax.scatter(d[:,0], d[:,1], c=color[i], marker='.')
+		ax.scatter(d[:,0], d[:,1], c=color[i], marker='.', edgecolors='none')
 	ax.set_title(title)
 	ax.set_xlim(-fov, fov)
 	ax.set_ylim(-fov, fov)
@@ -162,7 +163,21 @@ def plot_dataset(datasets, color, pathname, title='Dataset', fov=3):
 	fig.savefig(pathname, dpi=300)
 	plt.close(fig)
 
-def plot_dataset_en(baby, dataset, color_map, pathname, title='Dataset', fov=3, color_bar=True):
+def plot_dataset_gid(baby, data_size, color_map, pathname, fov=2):
+	g_num = baby.g_num
+	cmap = mat_cm.get_cmap(color_map)
+	rgb_colors = cmap(1.0 * np.arange(baby.g_num) / baby.g_num)
+	rgb_colors[:,3] = 0.2
+	g_data = list()
+	for i in range(g_num):
+		z = i * np.ones(data_size)
+		g_data.append(sample_baby_gan(baby, data_size, z_data=z))
+		g_color = np.array(rgb_colors[i,:].reshape(1, 4))
+		g_color[:,3] = 1.
+		plot_dataset([g_data[-1]], g_color, pathname+'_gid_'+str(i)+'.png', 'gid_'+str(i), fov=fov)
+	plot_dataset(g_data, rgb_colors.reshape(-1, 4), pathname+'_gids.png', 'Generators', fov=fov)
+
+def plot_dataset_en(baby, dataset, color_map, pathname, title='Dataset', fov=2, color_bar=True):
 	### plot the dataset
 	fig, ax = plt.subplots(figsize=(8, 6))
 	ax.clear()
@@ -173,7 +188,7 @@ def plot_dataset_en(baby, dataset, color_map, pathname, title='Dataset', fov=3, 
 	if d.shape[-1] == 1:
 		d = np.c_[d, np.ones(d.shape)]
 	dec = ax.scatter(d[:,0], d[:,1], c=cid, cmap=color_map, 
-		marker='.', vmin=0, vmax=baby.g_num-1)
+		marker='.', edgecolors='none', vmin=0, vmax=baby.g_num-1)
 
 	if color_bar is True:
 		fig.colorbar(dec)
@@ -664,6 +679,7 @@ def eval_baby_gan(baby, data_sampler, itr):
 	data_g = g_samples
 	plot_dataset_en(baby, data_r, color_map='tab10', pathname=log_path_data+'/data_%06d_r.png' % itr)
 	plot_dataset_en(baby, data_g, color_map='tab10', pathname=log_path_data+'/data_%06d_g.png' % itr)
+	plot_dataset_gid(baby, sample_size, color_map='tab10', pathname=log_path_data+'/data_%06d' % itr)
 	#plot_dataset([data_r, data_g], color=['r', 'b'], pathname=log_path_data+'/data_%06d.png' % itr)
 	#plot_manifold_1d(baby, pathname=log_path_manifold+'/data_%06d.png' % itr)
 
@@ -721,8 +737,10 @@ if __name__ == '__main__':
 	### generate sample draw
 	sample_size = 10000
 	data_g = sample_baby_gan(baby, sample_size)
-	plot_dataset([data_g], color=['b'], pathname=log_path+'/gen_dataset.png', fov=2)
-	#plot_dataset_en(baby, data_g, color_map='tab10', pathname=log_path+'/gen_dataset.png', fov=2, color_bar=False)
+	data_r = data_sampler(sample_size)
+	plot_dataset([data_r], color=['r'], pathname=log_path+'/real_dataset.png', fov=2)
+	#plot_dataset([data_g], color=['b'], pathname=log_path+'/gen_dataset.png', fov=2)
+	plot_dataset_en(baby, data_g, color_map='tab10', pathname=log_path+'/gen_dataset.png', fov=2, color_bar=False)
 
 	### eval baby gan
 	#e_dist, e_norm, net_stats = eval_baby_gan(baby, centers, stds)
