@@ -32,6 +32,7 @@ import argparse
 print matplotlib.get_backend()
 import scipy.stats as sc_stats
 import matplotlib.cm as mat_cm
+import cPickle as pk
 
 arg_parser = argparse.ArgumentParser()
 arg_parser.add_argument('-l', '--log-path', dest='log_path', required=True, help='log directory to store logs.')
@@ -628,15 +629,19 @@ def train_baby_gan(baby, data_sampler):
 		plt.close(fig)
 		
 		### plot rl_pvals **g_num**
+		pr_g = np.exp(rl_pvals_logs_mat)
+		pr_g = pr_g / (np.sum(pr_g, axis=1).reshape([-1, 1]))
+		pvals_mat = pr_g
+
 		fig, ax = plt.subplots(figsize=(8, 6))
 		ax.clear()
 		for g in range(baby.g_num):
-			ax.plot(itrs_logs, rl_pvals_logs_mat[:, g], label='g_%d' % g)
+			ax.plot(itrs_logs, pvals_mat[:, g], label='g_%d' % g)
 		ax.grid(True, which='both', linestyle='dotted')
 		ax.set_title('RL Policy')
 		ax.set_xlabel('Iterations')
 		ax.set_ylabel('Values')
-		ax.legend(loc=0)
+		#ax.legend(loc=0)
 		fig.savefig(log_path+'/rl_policy.png', dpi=300)
 		plt.close(fig)
 
@@ -652,6 +657,10 @@ def train_baby_gan(baby, data_sampler):
 		ax.legend(loc=0)
 		fig.savefig(log_path+'/encoder_acc.png', dpi=300)
 		plt.close(fig)
+
+		### save pval_logs
+		with open(log_path+'/rl_pvals.cpk', 'wb+') as fs:
+			pk.dump([itrs_logs, rl_pvals_logs_mat], fs)
 
 def eval_baby_gan(baby, data_sampler, itr):
 	### dataset definition
@@ -677,8 +686,8 @@ def eval_baby_gan(baby, data_sampler, itr):
 	### draw samples **1d_datadim** **g_num** **vee**
 	data_r = r_samples
 	data_g = g_samples
-	plot_dataset_en(baby, data_r, color_map='tab10', pathname=log_path_data+'/data_%06d_r.png' % itr)
-	plot_dataset_en(baby, data_g, color_map='tab10', pathname=log_path_data+'/data_%06d_g.png' % itr)
+	plot_dataset_en(baby, data_r, color_map='tab10', pathname=log_path_data+'/data_%06d_r.png' % itr, color_bar=False)
+	plot_dataset_en(baby, data_g, color_map='tab10', pathname=log_path_data+'/data_%06d_g.png' % itr, color_bar=False)
 	plot_dataset_gid(baby, sample_size, color_map='tab10', pathname=log_path_data+'/data_%06d' % itr)
 	#plot_dataset([data_r, data_g], color=['r', 'b'], pathname=log_path_data+'/data_%06d.png' % itr)
 	#plot_manifold_1d(baby, pathname=log_path_manifold+'/data_%06d.png' % itr)
